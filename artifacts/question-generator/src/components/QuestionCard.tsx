@@ -58,7 +58,7 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
 
       <CardContent className="pb-4">
         {question.options && question.options.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 ml-11">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 md:gap-3 mt-2 ml-0 sm:ml-11">
             {question.options.map((opt, i) => {
               const correct = isCorrectOption(opt);
               return (

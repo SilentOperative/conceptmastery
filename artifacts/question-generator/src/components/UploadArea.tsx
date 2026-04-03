@@ -105,7 +105,7 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
 
   return (
     <Card className="w-full bg-white dark:bg-card border-border shadow-sm">
-      <CardContent className="p-6">
+      <CardContent className="p-4 sm:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-6">
             <TabsTrigger value="image" data-testid="tab-image">
