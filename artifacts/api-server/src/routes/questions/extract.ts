@@ -27,7 +27,7 @@ If the image contains handwriting, interpret it carefully — common subjects ar
 
 Return ONLY the extracted question text in plain language. Do not add commentary, titles, or explanations.`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const result = await model.generateContent([
       prompt,

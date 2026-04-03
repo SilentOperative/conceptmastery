@@ -67,7 +67,7 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
   ]
 }`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
     const result = await model.generateContent(prompt);
     const rawContent = result.response.text();
 
