@@ -9,13 +9,24 @@ interface MathTextProps {
 
 function fixLatex(latex: string): string {
   return latex
-    .replace(/\\cdot([a-zA-Z]+)/g, (_m, unit) => `\\cdot\\text{${unit}}`)
-    .replace(/\\text\{([^}]+)\}([a-zA-Z]+)/g, (_m, t, rest) => `\\text{${t}${rest}}`)
-    .replace(/\\times([a-zA-Z]+)/g, (_m, unit) => `\\times\\text{${unit}}`)
-    .replace(/\\div([a-zA-Z]+)/g, (_m, unit) => `\\div\\text{${unit}}`)
-    .replace(/\\pm([a-zA-Z]+)/g, (_m, unit) => `\\pm\\text{${unit}}`)
-    .replace(/\^([a-zA-Z]+)(?!{)/g, (_m, unit) => `^{${unit}}`)
-    .replace(/_([a-zA-Z0-9]+)(?!{)/g, (_m, sub) => `_{${sub}}`);
+    // Fix bare superscripts without braces: x^2 → x^{2}, 10^-9 → 10^{-9}
+    .replace(/\^(-?[a-zA-Z0-9]+)(?![{])/g, "^{$1}")
+    // Fix bare subscripts without braces
+    .replace(/_([a-zA-Z0-9]+)(?![{])/g, "_{$1}")
+    // Fix \cdot or \times followed directly by unit letters (no space)
+    .replace(/\\cdot([a-zA-Z]+)/g, (_m, unit) => `\\cdot\\,\\text{${unit}}`)
+    .replace(/\\times([a-zA-Z]+)/g, (_m, unit) => `\\times\\,\\text{${unit}}`)
+    // Fix bare unit letters after a number (e.g. "60V" → "60\\,\\text{V}")
+    .replace(/(\d)(pF|nF|µF|uF|mF|pC|nC|µC|uC|mC|kΩ|MΩ|Ω|kV|mV|kW|MW|mW|kJ|MJ|mJ|eV|keV|MeV|GeV|mol|atm|Pa|kPa|MPa|rpm|rad)(?=[^a-zA-Z]|$)/g,
+      (_m, num, unit) => `${num}\\,\\text{${unit}}`)
+    // Fix \text{} immediately followed by extra letters that got outside the braces
+    .replace(/\\text\{([^}]+)\}([a-zA-Z/·•]+)/g, (_m, t, rest) => `\\text{${t}${rest}}`)
+    // Fix degree symbol written as ° (not in LaTeX)
+    .replace(/°/g, "^{\\circ}")
+    // Fix common chemistry element patterns like H2O, CO2 used outside \text{}
+    .replace(/\b([A-Z][a-z]?)(\d+)(?=[^a-zA-Z{]|$)/g, (_m, el, n) => `\\text{${el}}_{${n}}`)
+    // Ensure \frac, \sqrt, \vec etc. are handled (should already be fine after server fix)
+    ;
 }
 
 function renderMath(latex: string, displayMode: boolean): string {
@@ -25,6 +36,11 @@ function renderMath(latex: string, displayMode: boolean): string {
       displayMode,
       strict: false,
       trust: false,
+      macros: {
+        // Common physics/chemistry macros
+        "\\degree": "^{\\circ}",
+        "\\ohm": "\\Omega",
+      },
     });
   } catch {
     return escapeHtml(latex);

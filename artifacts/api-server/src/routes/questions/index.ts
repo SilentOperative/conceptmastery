@@ -29,22 +29,31 @@ Instructions:
 - Provide the correct answer and a brief step-by-step solution for each
 - Subject hint: ${subject}, Difficulty hint: ${difficulty}
 
-CRITICAL - Math Formatting Rules:
+CRITICAL - JSON Escaping Rules (read carefully):
+- You are writing JSON. ALL backslashes in string values MUST be doubled.
+- Write \\frac not \frac, \\text not \text, \\times not \times, \\sqrt not \sqrt
+- Every single LaTeX backslash must appear as \\\\ in the JSON output (two backslashes)
+
+CRITICAL - Math & Symbol Formatting Rules:
 - You MUST use LaTeX notation for ALL mathematical expressions using KaTeX syntax
 - Wrap inline math in single dollar signs: $expression$
 - Wrap display/block math in double dollar signs: $$expression$$
-- Examples of correct LaTeX formatting:
-  - Exponents: $10^{-2}$ NOT "10^-2"
-  - Fractions: $\\frac{1}{2}$ NOT "1/2"
-  - Multiplication: $3 \\times 10^{-2}$ NOT "3 x 10^-2"
-  - Square root: $\\sqrt{3}$ NOT "sqrt(3)"
-  - Greek letters: $\\theta$, $\\pi$, $\\alpha$, $\\omega$
-  - Subscripts: $a_{n}$, $v_{0}$
-  - Units with numbers: $9.8 \\, \\text{m/s}^2$
-  - Trigonometry: $\\sin(30°)$, $\\cos(\\theta)$
-  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$
-  - Unit notation: ALWAYS wrap units in \\text{}: $\\text{C·m}$, $\\text{N·m}$, $\\text{kg·m/s}$
-  - CRITICAL: Always add spaces around operators: $3 \\times 10^{-2}$ not $3\\times10^{-2}$
+- Examples of correct LaTeX formatting (note double backslashes for JSON):
+  - Exponents: $10^{-2}$
+  - Fractions: $\\\\frac{1}{2}$
+  - Multiplication: $3 \\\\times 10^{-2}$
+  - Square root: $\\\\sqrt{3}$
+  - Greek letters: $\\\\theta$, $\\\\pi$, $\\\\alpha$, $\\\\omega$, $\\\\lambda$, $\\\\mu$
+  - Subscripts/superscripts: $a_{n}$, $v_{0}$, $10^{-9}$
+  - Units: $9.8 \\\\, \\\\text{m/s}^2$, $\\\\text{pF}$, $\\\\text{nC}$, $\\\\text{V}$
+  - Trigonometry: $\\\\sin(30^{\\\\circ})$, $\\\\cos(\\\\theta)$
+  - Scientific notation: $1.8 \\\\times 10^{-2} \\\\, \\\\text{C}$
+  - Vectors: $\\\\vec{F}$, $\\\\vec{v}$
+  - Chemistry: use \\\\text{} for element symbols and compounds: $\\\\text{H}_2\\\\text{O}$, $\\\\text{CO}_2$
+  - Equilibrium/reaction arrows: $\\\\rightleftharpoons$, $\\\\rightarrow$
+  - Unit notation: ALWAYS wrap units in \\\\text{}: $\\\\text{N·m}$, $\\\\text{kg·m/s}$
+  - Degree symbol: $30^{\\\\circ}$ NOT 30°
+  - CRITICAL: Always add spaces around operators: $3 \\\\times 10^{-2}$ not $3\\\\times10^{-2}$
 - ALL numbers with units, fractions, exponents, and math symbols MUST be in LaTeX
 - Options text must also use LaTeX for math
 
@@ -70,8 +79,22 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
     let parsed_result;
     try {
       const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      // Fix unescaped LaTeX backslashes (e.g. \, \text \frac) that are invalid in JSON
-      const fixedJson = cleaned.replace(/\\([^"\\\/bfnrtu0-9])/g, "\\\\$1");
+      // Fix unescaped LaTeX backslashes. The AI often writes single backslashes in JSON
+      // string values which is invalid. Some LaTeX sequences (\t, \f, \n, \r, \b) coincide
+      // with valid JSON escape chars, so we handle those first with lookahead.
+      const fixedJson = cleaned
+        // \t followed by a letter = LaTeX command (e.g. \text, \times, \theta), not JSON tab
+        .replace(/\\t(?=[a-zA-Z])/g, "\\\\t")
+        // \f followed by a letter = LaTeX command (e.g. \frac, \forall), not JSON form-feed
+        .replace(/\\f(?=[a-zA-Z])/g, "\\\\f")
+        // \n followed by a letter = LaTeX command (e.g. \nabla, \nu), not JSON newline
+        .replace(/\\n(?=[a-zA-Z])/g, "\\\\n")
+        // \r followed by a letter = LaTeX command (e.g. \rho, \rightarrow), not JSON CR
+        .replace(/\\r(?=[a-zA-Z])/g, "\\\\r")
+        // \b followed by a letter = LaTeX command (e.g. \beta, \bigcap), not JSON backspace
+        .replace(/\\b(?=[a-zA-Z])/g, "\\\\b")
+        // Fix all remaining unescaped backslashes (before non-JSON-escape chars like \, \{ etc.)
+        .replace(/\\([^"\\\/bfnrtu0-9])/g, "\\\\$1");
       parsed_result = JSON.parse(fixedJson);
     } catch {
       req.log.error({ rawContent }, "Failed to parse AI response as JSON");
