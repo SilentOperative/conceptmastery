@@ -29,10 +29,14 @@ Return ONLY the extracted question text in plain language. Do not add commentary
     res.json({ text });
   } catch (error: unknown) {
     console.error("Image extraction error:", error);
-    const isQuota = (error as { status?: number })?.status === 429;
-    if (isQuota) {
+    const err = error as { status?: number; message?: string };
+    if (err?.status === 429) {
       res.status(429).json({
-        error: "Gemini API quota exceeded. Please wait a moment and try again, or check your API key at https://aistudio.google.com/app/apikey",
+        error: "Gemini API quota exceeded — your API key's project has billing enabled, which sets free tier quota to 0. Please create a new key at https://aistudio.google.com/app/apikey choosing 'Create API key in new project'.",
+      });
+    } else if (err?.status === 400) {
+      res.status(400).json({
+        error: "Your Gemini API key is expired or invalid. Please generate a fresh key at https://aistudio.google.com/app/apikey and update it in Replit Secrets.",
       });
     } else {
       res.status(500).json({ error: "Failed to extract text from image" });

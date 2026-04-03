@@ -22,6 +22,12 @@ async function callGemini(parts: Part[], maxTokens = 4096): Promise<string> {
     if (res.status === 429) {
       throw Object.assign(new Error("quota"), { status: 429, body });
     }
+    if (res.status === 400 && body.includes("API key expired")) {
+      throw Object.assign(new Error("key_expired"), { status: 400, body });
+    }
+    if (res.status === 400 && body.includes("API_KEY_INVALID")) {
+      throw Object.assign(new Error("key_invalid"), { status: 400, body });
+    }
     throw new Error(`Gemini API error ${res.status}: ${body}`);
   }
 
