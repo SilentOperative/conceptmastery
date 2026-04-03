@@ -29,6 +29,23 @@ Instructions:
 - Provide the correct answer and a brief step-by-step solution for each
 - Subject hint: ${subject}, Difficulty hint: ${difficulty}
 
+CRITICAL - Math Formatting Rules:
+- You MUST use LaTeX notation for ALL mathematical expressions using KaTeX syntax
+- Wrap inline math in single dollar signs: $expression$
+- Wrap display/block math in double dollar signs: $$expression$$
+- Examples of correct LaTeX formatting:
+  - Exponents: $10^{-2}$ NOT "10^-2"
+  - Fractions: $\\frac{1}{2}$ NOT "1/2"
+  - Multiplication: $3 \\times 10^{-2}$ NOT "3 x 10^-2"
+  - Square root: $\\sqrt{3}$ NOT "sqrt(3)"
+  - Greek letters: $\\theta$, $\\pi$, $\\alpha$, $\\omega$
+  - Subscripts: $a_{n}$, $v_{0}$
+  - Units with numbers: $9.8 \\, \\text{m/s}^2$
+  - Trigonometry: $\\sin(30°)$, $\\cos(\\theta)$
+  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$
+- ALL numbers with units, fractions, exponents, and math symbols MUST be in LaTeX
+- Options text must also use LaTeX for math
+
 Respond ONLY with this JSON structure (no markdown, no code blocks):
 {
   "topic": "specific topic name",
@@ -37,10 +54,10 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
   "questions": [
     {
       "id": "q1",
-      "text": "question text here",
-      "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
-      "answer": "A) correct option text",
-      "solution": "Step 1: ... Step 2: ... Final Answer: ...",
+      "text": "question text with $LaTeX$ math",
+      "options": ["A) $LaTeX$ option1", "B) $LaTeX$ option2", "C) $LaTeX$ option3", "D) $LaTeX$ option4"],
+      "answer": "A) $LaTeX$ correct answer",
+      "solution": "Step 1: Use formula $F = ma$. Step 2: Substitute: $F = 2 \\times 5 = 10$ N. Final Answer: $10 \\, \\text{N}$",
       "difficulty": "Easy|Medium|Hard|JEE Advanced"
     }
   ]

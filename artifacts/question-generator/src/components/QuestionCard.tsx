@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { GeneratedQuestion } from "@workspace/api-client-react/src/generated/api.schemas";
+import { GeneratedQuestion } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { MathText } from "@/components/MathText";
 import { ChevronDown, ChevronUp, Copy, CheckCircle2, Eye, EyeOff, Lightbulb, Volume2 } from "lucide-react";
 
 interface QuestionCardProps {
@@ -17,7 +17,7 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
   const [copied, setCopied] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
 
-  const difficultyColors = {
+  const difficultyColors: Record<string, string> = {
     "Easy": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800",
     "Medium": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
     "Hard": "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400 border-orange-200 dark:border-orange-800",
@@ -51,47 +51,64 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
       } else {
         setIsPlaying(false);
       }
-    } catch (e) {
-      console.error("TTS failed", e);
+    } catch {
       setIsPlaying(false);
     }
+  };
+
+  const isCorrectOption = (opt: string) => {
+    if (!showAnswer) return false;
+    const optLetter = opt.match(/^([A-D])\)/)?.[1];
+    const ansLetter = question.answer.match(/^([A-D])\)/)?.[1];
+    return optLetter && ansLetter && optLetter === ansLetter;
   };
 
   return (
     <Card className="w-full mb-6 print:break-inside-avoid print:shadow-none print:border-gray-200" data-testid={`card-question-${index}`}>
       <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
-        <div className="flex gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0">
+        <div className="flex gap-3 flex-1 min-w-0">
+          <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0 mt-0.5">
             {index + 1}
           </div>
-          <CardTitle className="text-lg leading-relaxed">{question.text}</CardTitle>
+          <CardTitle className="text-base leading-relaxed font-medium">
+            <MathText text={question.text} />
+          </CardTitle>
         </div>
-        <Badge variant="outline" className={`shrink-0 ${difficultyColors[question.difficulty] || ""}`} data-testid={`badge-difficulty-${index}`}>
+        <Badge variant="outline" className={`shrink-0 text-xs ${difficultyColors[question.difficulty] ?? ""}`} data-testid={`badge-difficulty-${index}`}>
           {question.difficulty}
         </Badge>
       </CardHeader>
-      
+
       <CardContent className="pb-4">
         {question.options && question.options.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 ml-11">
-            {question.options.map((opt, i) => (
-              <div 
-                key={i} 
-                className={`p-3 rounded-md border ${showAnswer && question.answer.includes(opt.substring(0, 2)) ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-800' : 'bg-secondary/30 border-transparent'}`}
-              >
-                <span className="font-medium mr-2">{String.fromCharCode(65 + i)})</span>
-                {opt.replace(/^[A-D]\)\s*/, '')}
-              </div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2 ml-11">
+            {question.options.map((opt, i) => {
+              const correct = isCorrectOption(opt);
+              return (
+                <div
+                  key={i}
+                  className={`p-3 rounded-md border text-sm transition-colors ${
+                    correct
+                      ? "bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-700"
+                      : "bg-secondary/30 border-border"
+                  }`}
+                >
+                  <span className="font-semibold mr-2 text-muted-foreground">
+                    {String.fromCharCode(65 + i)})
+                  </span>
+                  <MathText text={opt.replace(/^[A-D]\)\s*/i, '')} />
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
 
-      <CardFooter className="flex flex-col items-start gap-4 pt-4 border-t bg-secondary/10 print:hidden">
+      <CardFooter className="flex flex-col items-start gap-3 pt-4 border-t bg-secondary/10 print:hidden">
         <div className="flex flex-wrap items-center w-full gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setShowAnswer(!showAnswer)}
             data-testid={`button-reveal-answer-${index}`}
             className={showAnswer ? "bg-primary/10 text-primary border-primary/20" : ""}
@@ -99,10 +116,10 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
             {showAnswer ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
             {showAnswer ? "Hide Answer" : "Reveal Answer"}
           </Button>
-          
-          <Button 
-            variant="outline" 
-            size="sm" 
+
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setShowSolution(!showSolution)}
             data-testid={`button-reveal-solution-${index}`}
             className={showSolution ? "bg-primary/10 text-primary border-primary/20" : ""}
@@ -125,16 +142,16 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
         </div>
 
         {showAnswer && (
-          <div className="w-full p-4 mt-2 rounded-md bg-primary/5 border border-primary/10 text-sm animate-in fade-in slide-in-from-top-2" data-testid={`text-answer-${index}`}>
+          <div className="w-full p-4 rounded-md bg-primary/5 border border-primary/10 text-sm animate-in fade-in slide-in-from-top-2" data-testid={`text-answer-${index}`}>
             <span className="font-semibold text-primary mr-2">Correct Answer:</span>
-            {question.answer}
+            <MathText text={question.answer} />
           </div>
         )}
 
         {showSolution && (
-          <div className="w-full p-4 mt-2 rounded-md bg-secondary/50 border text-sm animate-in fade-in slide-in-from-top-2 whitespace-pre-wrap leading-relaxed" data-testid={`text-solution-${index}`}>
-            <span className="font-semibold mb-2 block">Step-by-step Solution:</span>
-            {question.solution}
+          <div className="w-full p-4 rounded-md bg-secondary/50 border text-sm animate-in fade-in slide-in-from-top-2 leading-relaxed" data-testid={`text-solution-${index}`}>
+            <span className="font-semibold mb-3 block">Step-by-step Solution:</span>
+            <MathText text={question.solution} block className="solution-math space-y-1" />
           </div>
         )}
       </CardFooter>
