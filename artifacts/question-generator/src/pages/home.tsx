@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import { Loader2, Download, Copy, Sparkles, AlertCircle, RefreshCw, BookOpen } from "lucide-react";
+import { Download, Copy, Sparkles, AlertCircle, BookOpen } from "lucide-react";
+import { GeneratingProgress } from "@/components/GeneratingProgress";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -223,22 +224,18 @@ export default function Home() {
                       disabled={generateQuestions.isPending || !extractedText.trim()}
                       data-testid="button-generate"
                     >
-                      {generateQuestions.isPending ? (
-                        <>
-                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-4 h-4 mr-2" />
-                          Generate Practice Set
-                        </>
-                      )}
+                      <Sparkles className="w-4 h-4 mr-2" />
+                      {generateQuestions.isPending ? "Generating..." : "Generate Practice Set"}
                     </Button>
                   </CardContent>
                 </Card>
               </section>
             )}
+
+            <GeneratingProgress
+              isVisible={generateQuestions.isPending}
+              questionCount={count[0]}
+            />
 
             {generateQuestions.isError && (
               <Alert variant="destructive" className="print:hidden">

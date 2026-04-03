@@ -67,12 +67,12 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
+      model: "gpt-4o-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
-      max_completion_tokens: 8192,
+      max_completion_tokens: 4096,
     });
 
     const rawContent = completion.choices[0]?.message?.content ?? "";
