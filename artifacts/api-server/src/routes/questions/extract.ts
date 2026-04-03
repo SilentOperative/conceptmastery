@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateWithImage } from "../../lib/groq.js";
+import { generateWithImage } from "../../lib/openai.js";
 
 const router = Router();
 
@@ -12,18 +12,26 @@ router.post("/questions/extract-image", async (req, res) => {
       return;
     }
 
-    const prompt = `You are an expert at reading academic exam questions from images — including printed textbook problems, handwritten notes (even on dark backgrounds or in colored ink), and diagrams. 
+    const prompt = `You are an expert at reading academic exam questions from images — including printed textbook problems, handwritten notes (even on dark backgrounds or in colored ink), and diagrams.
 
-Extract the complete question text from this image. Your extraction must include:
-- The full question statement
-- All answer options (A, B, C, D) if present
-- Any mathematical formulas, equations, or quantities with proper notation
-- Any given data, conditions, or constraints
+Your job is ONLY to transcribe what is LITERALLY VISIBLE in the image. Do NOT generate, invent, or infer anything that is not clearly shown.
+
+Extract and transcribe:
+- The full question statement exactly as written
+- Answer options (A, B, C, D) ONLY if they are visibly printed or written in the image — if they are NOT visible, do NOT include them or make them up
+- Mathematical formulas, equations, or quantities exactly as shown
+- Any given data, conditions, or constraints visible in the image
 - Key terms from any diagrams visible
+
+STRICT RULES:
+- Never generate answer options or solutions that are not in the image
+- Never add explanations, answers, or extra commentary
+- Never guess or hallucinate content — only transcribe what you can clearly see
+- If the image only shows a question with no options, output ONLY the question text
 
 If the image contains handwriting, interpret it carefully — common subjects are Physics, Chemistry, and Mathematics for JEE/NEET exams.
 
-Return ONLY the extracted question text in plain language. Do not add commentary, titles, or explanations.`;
+Return ONLY the extracted text exactly as it appears. No commentary, no added content, no answers.`;
 
     const text = await generateWithImage(prompt, imageBase64, mimeType, 1000);
     res.json({ text });

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateText } from "../../lib/groq.js";
+import { generateText } from "../../lib/openai.js";
 import { GenerateQuestionsBody } from "@workspace/api-zod";
 
 const router = Router();
