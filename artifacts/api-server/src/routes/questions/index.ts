@@ -42,7 +42,10 @@ CRITICAL - Math Formatting Rules:
   - Subscripts: $a_{n}$, $v_{0}$
   - Units with numbers: $9.8 \\, \\text{m/s}^2$
   - Trigonometry: $\\sin(30°)$, $\\cos(\\theta)$
-  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$
+  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$ (use middle dot · directly in \\text{}, NEVER \\cdot followed by letters)
+  - Unit notation: ALWAYS wrap units in \\text{}: $\\text{C·m}$, $\\text{N·m}$, $\\text{kg·m/s}$
+  - CRITICAL: NEVER write \\cdotm or \\cdots — always put \\cdot INSIDE \\text{} like \\text{C·m}
+  - CRITICAL: Always add spaces around operators: $3 \\times 10^{-2}$ not $3\\times10^{-2}$
 - ALL numbers with units, fractions, exponents, and math symbols MUST be in LaTeX
 - Options text must also use LaTeX for math
 
