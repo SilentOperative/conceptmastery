@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { UploadArea } from "@/components/UploadArea";
 import { QuestionCard } from "@/components/QuestionCard";
 import { HistorySidebar } from "@/components/HistorySidebar";
 import { useHistory, HistorySession } from "@/hooks/use-history";
-import { useGenerateQuestions, GenerateQuestionsBodySubject, GenerateQuestionsBodyDifficulty } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Subject, Difficulty, GeneratedQuestion } from "@/types";
+import { generateQuestions } from "@/lib/puter-ai";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,95 +17,97 @@ import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ThemeToggle } from "@/components/ThemeToggle";
 
+const SUBJECTS: Subject[] = ["Physics", "Chemistry", "Mathematics", "Biology", "General"];
+const DIFFICULTIES: Difficulty[] = ["Easy", "Medium", "Hard", "JEE Advanced"];
+
 export default function Home() {
   const { toast } = useToast();
   const { history, saveSession, clearHistory, deleteSession } = useHistory();
-  
+
   const [extractedText, setExtractedText] = useState("");
-  const [subject, setSubject] = useState<GenerateQuestionsBodySubject>("Physics");
-  const [difficulty, setDifficulty] = useState<GenerateQuestionsBodyDifficulty>("Medium");
+  const [subject, setSubject] = useState<Subject>("Physics");
+  const [difficulty, setDifficulty] = useState<Difficulty>("Medium");
   const [count, setCount] = useState([5]);
-  
+
+  const [isPending, setIsPending] = useState(false);
+  const [isError, setIsError] = useState(false);
   const [currentSession, setCurrentSession] = useState<HistorySession | null>(null);
-  
-  const generateQuestions = useGenerateQuestions();
+
   const contentRef = useRef<HTMLDivElement>(null);
 
   const handleTextExtracted = (text: string) => {
     setExtractedText(text);
-    setCurrentSession(null); // Clear current viewing session when new text comes in
+    setCurrentSession(null);
   };
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!extractedText.trim()) {
       toast({
         title: "Missing text",
         description: "Please extract or enter text from a question first.",
-        variant: "destructive"
+        variant: "destructive",
       });
       return;
     }
 
-    generateQuestions.mutate({
-      data: {
-        questionText: extractedText,
-        subject,
-        difficulty,
-        count: count[0]
-      }
-    }, {
-      onSuccess: (data) => {
-        saveSession({
-          originalText: extractedText,
-          topic: data.topic || "Unknown Topic",
-          subject: data.subject || subject,
-          difficulty: data.difficulty || difficulty,
-          questions: data.questions
-        });
-        toast({
-          title: "Questions generated!",
-          description: `Successfully created ${data.questions.length} similar questions for practice.`,
-        });
-        
-        // After saving, history hook updates. The newest session is at index 0.
-        // We let the history list render, but we need the latest session to be selected.
-        // We'll just wait for the next render or use the response data directly.
-        setCurrentSession({
-          id: "temp-current",
-          date: new Date().toISOString(),
-          originalText: extractedText,
-          topic: data.topic || "Unknown Topic",
-          subject: data.subject || subject,
-          difficulty: data.difficulty || difficulty,
-          questions: data.questions
-        });
-        
-        setTimeout(() => {
-          contentRef.current?.scrollIntoView({ behavior: 'smooth' });
-        }, 100);
-      },
-      onError: (err: unknown) => {
-        const errMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-        toast({
-          title: "Failed to generate questions",
-          description: errMsg || "There was an error connecting to the AI service. Please try again.",
-          variant: "destructive"
-        });
-      }
-    });
+    setIsPending(true);
+    setIsError(false);
+
+    try {
+      const data = await generateQuestions(extractedText, subject, difficulty, count[0]);
+
+      saveSession({
+        originalText: extractedText,
+        topic: data.topic || "Unknown Topic",
+        subject: data.subject || subject,
+        difficulty: data.difficulty || difficulty,
+        questions: data.questions,
+      });
+
+      toast({
+        title: "Questions generated!",
+        description: `Successfully created ${data.questions.length} similar questions for practice.`,
+      });
+
+      setCurrentSession({
+        id: "temp-current",
+        date: new Date().toISOString(),
+        originalText: extractedText,
+        topic: data.topic || "Unknown Topic",
+        subject: data.subject || subject,
+        difficulty: data.difficulty || difficulty,
+        questions: data.questions,
+      });
+
+      setTimeout(() => {
+        contentRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    } catch (err: unknown) {
+      setIsError(true);
+      const msg = err instanceof Error ? err.message : undefined;
+      toast({
+        title: "Failed to generate questions",
+        description: msg || "There was an error connecting to the AI service. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const handleCopyAll = () => {
     if (!currentSession || currentSession.questions.length === 0) return;
-    
-    const text = currentSession.questions.map((q, i) => {
-      let qt = `Q${i + 1}. ${q.text}\n`;
-      if (q.options && q.options.length) {
-        qt += q.options.join("\n") + "\n";
-      }
-      return qt;
-    }).join("\n\n");
-    
+
+    const text = currentSession.questions
+      .map((q: GeneratedQuestion, i: number) => {
+        let qt = `Q${i + 1}. ${q.text}\n`;
+        if (q.options && q.options.length) {
+          qt += q.options.join("\n") + "\n";
+        }
+        return qt;
+      })
+      .join("\n\n");
+
     navigator.clipboard.writeText(text);
     toast({ title: "Copied to clipboard" });
   };
@@ -115,14 +118,14 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <HistorySidebar 
-        history={history} 
+      <HistorySidebar
+        history={history}
         onSelectSession={setCurrentSession}
         onClearHistory={clearHistory}
         onDeleteSession={deleteSession}
         currentSessionId={currentSession?.id}
       />
-      
+
       <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         <header className="h-16 border-b bg-card flex items-center justify-between px-6 shrink-0 z-10 print:hidden">
           <div className="flex items-center gap-3">
@@ -139,16 +142,13 @@ export default function Home() {
 
         <main className="flex-1 overflow-y-auto p-6 md:p-8 lg:p-10 print:p-0 print:overflow-visible">
           <div className="max-w-5xl mx-auto space-y-8">
-            
+
             <section className="print:hidden">
               <div className="mb-6">
                 <h2 className="text-2xl font-semibold tracking-tight mb-2">Input Source Question</h2>
                 <p className="text-muted-foreground text-sm">Upload an image of a question or type it manually to generate similar practice problems.</p>
               </div>
-              <UploadArea 
-                onTextExtracted={handleTextExtracted} 
-                isLoading={generateQuestions.isPending} 
-              />
+              <UploadArea onTextExtracted={handleTextExtracted} isLoading={isPending} />
             </section>
 
             {extractedText && (
@@ -156,10 +156,9 @@ export default function Home() {
                 <Card className="lg:col-span-2 border-primary/20 shadow-sm">
                   <CardHeader className="pb-3">
                     <CardTitle className="text-lg">Extracted Text</CardTitle>
-                    <CardDescription>Edit if OCR missed anything</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <Textarea 
+                    <Textarea
                       value={extractedText}
                       onChange={(e) => setExtractedText(e.target.value)}
                       className="min-h-[160px] font-medium leading-relaxed resize-y"
@@ -178,13 +177,13 @@ export default function Home() {
                   <CardContent className="space-y-6">
                     <div className="space-y-2">
                       <Label htmlFor="subject">Subject</Label>
-                      <Select value={subject} onValueChange={(v) => setSubject(v as GenerateQuestionsBodySubject)}>
+                      <Select value={subject} onValueChange={(v) => setSubject(v as Subject)}>
                         <SelectTrigger id="subject" data-testid="select-subject">
                           <SelectValue placeholder="Select subject" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.values(GenerateQuestionsBodySubject).map(sub => (
-                            <SelectItem key={sub} value={sub}>{sub}</SelectItem>
+                          {SUBJECTS.map((s) => (
+                            <SelectItem key={s} value={s}>{s}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -192,13 +191,13 @@ export default function Home() {
 
                     <div className="space-y-2">
                       <Label htmlFor="difficulty">Target Difficulty</Label>
-                      <Select value={difficulty} onValueChange={(v) => setDifficulty(v as GenerateQuestionsBodyDifficulty)}>
+                      <Select value={difficulty} onValueChange={(v) => setDifficulty(v as Difficulty)}>
                         <SelectTrigger id="difficulty" data-testid="select-difficulty">
                           <SelectValue placeholder="Select difficulty" />
                         </SelectTrigger>
                         <SelectContent>
-                          {Object.values(GenerateQuestionsBodyDifficulty).map(diff => (
-                            <SelectItem key={diff} value={diff}>{diff}</SelectItem>
+                          {DIFFICULTIES.map((d) => (
+                            <SelectItem key={d} value={d}>{d}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -209,36 +208,33 @@ export default function Home() {
                         <Label>Question Count</Label>
                         <span className="text-sm font-semibold w-6 text-center bg-secondary rounded-md py-0.5">{count[0]}</span>
                       </div>
-                      <Slider 
-                        value={count} 
-                        onValueChange={setCount} 
-                        min={3} 
-                        max={10} 
+                      <Slider
+                        value={count}
+                        onValueChange={setCount}
+                        min={3}
+                        max={10}
                         step={1}
                         data-testid="slider-count"
                       />
                     </div>
 
-                    <Button 
-                      className="w-full font-semibold shadow-sm" 
+                    <Button
+                      className="w-full font-semibold shadow-sm"
                       onClick={handleGenerate}
-                      disabled={generateQuestions.isPending || !extractedText.trim()}
+                      disabled={isPending || !extractedText.trim()}
                       data-testid="button-generate"
                     >
                       <Sparkles className="w-4 h-4 mr-2" />
-                      {generateQuestions.isPending ? "Generating..." : "Generate Practice Set"}
+                      {isPending ? "Generating..." : "Generate Practice Set"}
                     </Button>
                   </CardContent>
                 </Card>
               </section>
             )}
 
-            <GeneratingProgress
-              isVisible={generateQuestions.isPending}
-              questionCount={count[0]}
-            />
+            <GeneratingProgress isVisible={isPending} questionCount={count[0]} />
 
-            {generateQuestions.isError && (
+            {isError && (
               <Alert variant="destructive" className="print:hidden">
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Generation Failed</AlertTitle>
@@ -271,7 +267,6 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Print Header */}
                 <div className="hidden print:block mb-8 text-center border-b pb-4">
                   <h1 className="text-2xl font-bold mb-2">Practice Set: {currentSession.topic}</h1>
                   <p className="text-gray-600">
@@ -280,7 +275,7 @@ export default function Home() {
                 </div>
 
                 <div className="space-y-6">
-                  {currentSession.questions.map((q, i) => (
+                  {currentSession.questions.map((q: GeneratedQuestion, i: number) => (
                     <QuestionCard key={q.id || i} question={q} index={i} />
                   ))}
                 </div>

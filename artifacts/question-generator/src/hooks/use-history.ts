@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { GeneratedQuestion } from "@workspace/api-client-react/src/generated/api.schemas";
+import { GeneratedQuestion } from "@/types";
 
 export interface HistorySession {
   id: string;
@@ -33,7 +33,7 @@ export function useHistory() {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
     };
-    
+
     setHistory((prev) => {
       const newHistory = [newSession, ...prev];
       localStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));

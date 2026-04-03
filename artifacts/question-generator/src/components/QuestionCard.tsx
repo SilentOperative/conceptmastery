@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GeneratedQuestion } from "@workspace/api-client-react";
+import { GeneratedQuestion } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [copied, setCopied] = useState(false);
+
   const difficultyColors: Record<string, string> = {
     "Easy": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800",
     "Medium": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
@@ -72,7 +73,7 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
                   <span className="font-semibold mr-2 text-muted-foreground">
                     {String.fromCharCode(65 + i)})
                   </span>
-                  <MathText text={opt.replace(/^[A-D]\)\s*/i, '')} />
+                  <MathText text={opt.replace(/^[A-D]\)\s*/i, "")} />
                 </div>
               );
             })}

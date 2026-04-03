@@ -3,6 +3,7 @@ import { UploadCloud, Image as ImageIcon, Type, Loader2, CheckCircle2, Sparkles 
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { extractTextFromImage } from "@/lib/puter-ai";
 
 interface UploadAreaProps {
   onTextExtracted: (text: string) => void;
@@ -41,24 +42,8 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
 
     try {
       const { base64, mimeType } = await fileToBase64(file);
+      const text = await extractTextFromImage(base64, mimeType);
 
-      const apiBase = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
-      const response = await fetch(`${apiBase}/api/questions/extract-image`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ imageBase64: base64, mimeType }),
-      });
-
-      if (!response.ok) {
-        let errorMsg = "Failed to extract text. Please try again or use Manual Text.";
-        try {
-          const errData = await response.json();
-          if (errData?.error) errorMsg = errData.error;
-        } catch {}
-        throw new Error(errorMsg);
-      }
-
-      const { text } = await response.json();
       setStatus("Done!");
       setExtractionDone(true);
 
