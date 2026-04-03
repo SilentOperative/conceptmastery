@@ -43,7 +43,12 @@ Return ONLY the extracted question text in plain language. Do not add commentary
     res.json({ text });
   } catch (error: unknown) {
     console.error("Image extraction error:", error);
-    res.status(500).json({ error: "Failed to extract text from image" });
+    const isQuota = error instanceof Error && error.message.includes("429");
+    if (isQuota) {
+      res.status(429).json({ error: "Gemini API quota exceeded. Please wait a moment and try again, or check your API key at https://aistudio.google.com/app/apikey" });
+    } else {
+      res.status(500).json({ error: "Failed to extract text from image" });
+    }
   }
 });
 

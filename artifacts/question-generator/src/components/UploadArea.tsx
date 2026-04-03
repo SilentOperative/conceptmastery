@@ -50,7 +50,12 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
       });
 
       if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`);
+        let errorMsg = "Failed to extract text. Please try again or use Manual Text.";
+        try {
+          const errData = await response.json();
+          if (errData?.error) errorMsg = errData.error;
+        } catch {}
+        throw new Error(errorMsg);
       }
 
       const { text } = await response.json();
@@ -65,11 +70,12 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
       }, 800);
     } catch (error) {
       console.error("Extraction error:", error);
-      setStatus("Failed to extract text. Please try again or use Manual Text.");
+      const msg = error instanceof Error ? error.message : "Failed to extract text. Please try again or use Manual Text.";
+      setStatus(msg);
       setTimeout(() => {
         setIsExtracting(false);
         setStatus("");
-      }, 3000);
+      }, 6000);
     }
   }, [onTextExtracted]);
 
