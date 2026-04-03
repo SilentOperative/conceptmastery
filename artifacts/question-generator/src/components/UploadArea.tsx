@@ -1,41 +1,35 @@
-import { useState, useCallback, useEffect, useRef } from "react";
-import { createWorker } from "tesseract.js";
-import { UploadCloud, Image as ImageIcon, Type, Loader2, CheckCircle2 } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { UploadCloud, Image as ImageIcon, Type, Loader2, CheckCircle2, Sparkles } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Progress } from "@/components/ui/progress";
 
 interface UploadAreaProps {
   onTextExtracted: (text: string) => void;
   isLoading?: boolean;
 }
 
-function cleanOcrText(raw: string): string {
-  return raw
-    .replace(/\r\n/g, "\n")
-    .replace(/\r/g, "\n")
-    .replace(/\f/g, "")
-    .replace(/([a-zA-Z])(\d)/g, "$1 $2")
-    .replace(/(\d)([a-zA-Z])/g, "$1 $2")
-    .replace(/\|/g, "I")
-    .replace(/l(?=\d)/g, "1")
-    .replace(/O(?=\d)/g, "0")
-    .replace(/\n{3,}/g, "\n\n")
-    .replace(/[ \t]{2,}/g, " ")
-    .trim();
+async function fileToBase64(file: File): Promise<{ base64: string; mimeType: string }> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      const base64 = result.split(",")[1];
+      resolve({ base64, mimeType: file.type || "image/jpeg" });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
   const [activeTab, setActiveTab] = useState("image");
   const [isDragging, setIsDragging] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState(0);
-  const [ocrStatus, setOcrStatus] = useState("");
+  const [status, setStatus] = useState("");
   const [isExtracting, setIsExtracting] = useState(false);
   const [extractionDone, setExtractionDone] = useState(false);
   const [manualText, setManualText] = useState("");
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const workerRef = useRef<Awaited<ReturnType<typeof createWorker>> | null>(null);
 
   const processImage = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) return;
@@ -43,58 +37,41 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
     setPreviewImage(URL.createObjectURL(file));
     setIsExtracting(true);
     setExtractionDone(false);
-    setOcrProgress(0);
-    setOcrStatus("Initializing OCR engine...");
+    setStatus("Analyzing image with AI...");
 
     try {
-      const worker = await createWorker("eng", 1, {
-        logger: (m) => {
-          if (m.status === "loading tesseract core") setOcrStatus("Loading OCR core...");
-          else if (m.status === "loading language traineddata") setOcrStatus("Loading English model...");
-          else if (m.status === "initializing api") setOcrStatus("Initializing...");
-          else if (m.status === "recognizing text") {
-            setOcrStatus("Recognizing text...");
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        },
+      const { base64, mimeType } = await fileToBase64(file);
+
+      const apiBase = import.meta.env.BASE_URL?.replace(/\/$/, "") || "";
+      const response = await fetch(`${apiBase}/api/questions/extract-image`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType }),
       });
 
-      workerRef.current = worker;
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
 
-      await worker.setParameters({
-        tessedit_pageseg_mode: "6" as string,
-        preserve_interword_spaces: "1" as string,
-      });
-
-      const { data } = await worker.recognize(file);
-      await worker.terminate();
-      workerRef.current = null;
-
-      const cleaned = cleanOcrText(data.text);
-      setOcrStatus("Done!");
-      setOcrProgress(100);
+      const { text } = await response.json();
+      setStatus("Done!");
       setExtractionDone(true);
 
       setTimeout(() => {
-        onTextExtracted(cleaned);
+        onTextExtracted(text);
         setIsExtracting(false);
-        setOcrProgress(0);
-        setOcrStatus("");
+        setStatus("");
         setExtractionDone(false);
       }, 800);
     } catch (error) {
-      console.error("OCR Error:", error);
-      setOcrStatus("Error during extraction.");
-      setIsExtracting(false);
-      setOcrProgress(0);
+      console.error("Extraction error:", error);
+      setStatus("Failed to extract text. Please try again or use Manual Text.");
+      setTimeout(() => {
+        setIsExtracting(false);
+        setStatus("");
+      }, 3000);
     }
   }, [onTextExtracted]);
-
-  useEffect(() => {
-    return () => {
-      workerRef.current?.terminate().catch(() => {});
-    };
-  }, []);
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -132,8 +109,7 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
   const clearImage = () => {
     setPreviewImage(null);
     setIsExtracting(false);
-    setOcrProgress(0);
-    setOcrStatus("");
+    setStatus("");
   };
 
   return (
@@ -176,6 +152,10 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
                   <span className="font-semibold text-foreground">Click to upload</span> or drag and drop
                 </p>
                 <p className="text-xs text-muted-foreground">PNG, JPG or paste from clipboard (Ctrl+V)</p>
+                <div className="flex items-center gap-1.5 mt-3 text-xs text-primary/70">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>AI-powered — works with printed text and handwriting</span>
+                </div>
               </div>
             ) : (
               <div className="relative flex flex-col items-center w-full border rounded-lg overflow-hidden bg-black/5" data-testid="preview-container">
@@ -194,18 +174,25 @@ export function UploadArea({ onTextExtracted, isLoading }: UploadAreaProps) {
 
                 {isExtracting && (
                   <div className="w-full px-6 py-5 border-t bg-card" data-testid="extracting-indicator">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        {extractionDone ? (
-                          <CheckCircle2 className="w-4 h-4 text-green-500" />
-                        ) : (
-                          <Loader2 className="w-4 h-4 animate-spin text-primary" />
-                        )}
-                        <span className="text-sm font-medium text-foreground">{ocrStatus}</span>
-                      </div>
-                      <span className="text-sm font-mono text-muted-foreground">{ocrProgress}%</span>
+                    <div className="flex items-center gap-2">
+                      {extractionDone ? (
+                        <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />
+                      ) : (
+                        <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                      )}
+                      <span className="text-sm font-medium text-foreground">{status}</span>
                     </div>
-                    <Progress value={ocrProgress} className="h-1.5" data-testid="progress-bar" />
+                    {!extractionDone && (
+                      <div className="mt-2 h-1 w-full rounded-full bg-secondary overflow-hidden">
+                        <div className="h-full bg-primary rounded-full animate-pulse" style={{ width: "60%" }} />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {status && !isExtracting && (
+                  <div className="w-full px-6 py-3 border-t bg-red-50 dark:bg-red-900/20 text-sm text-red-600 dark:text-red-400">
+                    {status}
                   </div>
                 )}
               </div>
