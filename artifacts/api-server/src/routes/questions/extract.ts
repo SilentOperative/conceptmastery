@@ -1,7 +1,9 @@
 import { Router } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const router = Router();
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 router.post("/questions/extract-image", async (req, res) => {
   try {
@@ -12,15 +14,7 @@ router.post("/questions/extract-image", async (req, res) => {
       return;
     }
 
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "text",
-              text: `You are an expert at reading academic exam questions from images — including printed textbook problems, handwritten notes (even on dark backgrounds or in colored ink), and diagrams. 
+    const prompt = `You are an expert at reading academic exam questions from images — including printed textbook problems, handwritten notes (even on dark backgrounds or in colored ink), and diagrams. 
 
 Extract the complete question text from this image. Your extraction must include:
 - The full question statement
@@ -31,22 +25,21 @@ Extract the complete question text from this image. Your extraction must include
 
 If the image contains handwriting, interpret it carefully — common subjects are Physics, Chemistry, and Mathematics for JEE/NEET exams.
 
-Return ONLY the extracted question text in plain language. Do not add commentary, titles, or explanations.`,
-            },
-            {
-              type: "image_url",
-              image_url: {
-                url: `data:${mimeType};base64,${imageBase64}`,
-                detail: "high",
-              },
-            },
-          ],
-        },
-      ],
-      max_tokens: 1000,
-    });
+Return ONLY the extracted question text in plain language. Do not add commentary, titles, or explanations.`;
 
-    const text = response.choices[0]?.message?.content ?? "";
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+    const result = await model.generateContent([
+      prompt,
+      {
+        inlineData: {
+          mimeType: mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+          data: imageBase64,
+        },
+      },
+    ]);
+
+    const text = result.response.text();
     res.json({ text });
   } catch (error: unknown) {
     console.error("Image extraction error:", error);

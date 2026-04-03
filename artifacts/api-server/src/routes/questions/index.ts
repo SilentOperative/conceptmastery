@@ -1,8 +1,10 @@
 import { Router } from "express";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import { GenerateQuestionsBody } from "@workspace/api-zod";
 
 const router = Router();
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 router.post("/questions/generate", async (req, res) => {
   try {
@@ -14,11 +16,11 @@ router.post("/questions/generate", async (req, res) => {
 
     const { questionText, subject = "General", difficulty = "Medium", count = 5 } = parsed.data;
 
-    const systemPrompt = `You are an expert educator for competitive exams like JEE and NEET. 
+    const prompt = `You are an expert educator for competitive exams like JEE and NEET. 
 Your task is to analyze a given question and generate similar practice questions.
-Always respond with valid JSON only, no markdown code blocks.`;
+Always respond with valid JSON only, no markdown code blocks.
 
-    const userPrompt = `Analyze this question and generate ${count} similar practice questions:
+Analyze this question and generate ${count} similar practice questions:
 
 "${questionText}"
 
@@ -42,9 +44,8 @@ CRITICAL - Math Formatting Rules:
   - Subscripts: $a_{n}$, $v_{0}$
   - Units with numbers: $9.8 \\, \\text{m/s}^2$
   - Trigonometry: $\\sin(30°)$, $\\cos(\\theta)$
-  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$ (use middle dot · directly in \\text{}, NEVER \\cdot followed by letters)
+  - Scientific notation: $1.8 \\times 10^{-2} \\, \\text{C·m}$
   - Unit notation: ALWAYS wrap units in \\text{}: $\\text{C·m}$, $\\text{N·m}$, $\\text{kg·m/s}$
-  - CRITICAL: NEVER write \\cdotm or \\cdots — always put \\cdot INSIDE \\text{} like \\text{C·m}
   - CRITICAL: Always add spaces around operators: $3 \\times 10^{-2}$ not $3\\times10^{-2}$
 - ALL numbers with units, fractions, exponents, and math symbols MUST be in LaTeX
 - Options text must also use LaTeX for math
@@ -66,16 +67,9 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
   ]
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_completion_tokens: 4096,
-    });
-
-    const rawContent = completion.choices[0]?.message?.content ?? "";
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const result = await model.generateContent(prompt);
+    const rawContent = result.response.text();
 
     let parsed_result;
     try {

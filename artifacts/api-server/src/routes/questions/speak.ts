@@ -1,5 +1,4 @@
 import { Router } from "express";
-import { textToSpeech } from "@workspace/integrations-openai-ai-server/audio";
 
 const router = Router();
 
@@ -11,12 +10,15 @@ router.post("/questions/speak", async (req, res) => {
       return;
     }
 
-    const audioBuffer = await textToSpeech(text.slice(0, 4096), "alloy", "mp3");
-    res.setHeader("Content-Type", "audio/mpeg");
-    res.setHeader("Content-Length", audioBuffer.length);
-    res.end(audioBuffer);
+    const cleanText = text
+      .replace(/\$\$[^$]+\$\$/g, "")
+      .replace(/\$[^$]+\$/g, "")
+      .replace(/\\[a-zA-Z]+\{[^}]*\}/g, "")
+      .replace(/[\\{}$]/g, "")
+      .trim();
+
+    res.status(503).json({ error: "Text-to-speech is not available without a paid API" });
   } catch (err) {
-    req.log.error({ err }, "Error generating speech");
     res.status(500).json({ error: "Failed to generate speech" });
   }
 });

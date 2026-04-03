@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MathText } from "@/components/MathText";
-import { ChevronDown, ChevronUp, Copy, CheckCircle2, Eye, EyeOff, Lightbulb, Volume2 } from "lucide-react";
+import { Copy, CheckCircle2, Eye, EyeOff, Lightbulb } from "lucide-react";
 
 interface QuestionCardProps {
   question: GeneratedQuestion;
@@ -15,8 +15,6 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
   const [showAnswer, setShowAnswer] = useState(false);
   const [showSolution, setShowSolution] = useState(false);
   const [copied, setCopied] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false);
-
   const difficultyColors: Record<string, string> = {
     "Easy": "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 border-green-200 dark:border-green-800",
     "Medium": "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 border-yellow-200 dark:border-yellow-800",
@@ -32,28 +30,6 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSpeak = async () => {
-    try {
-      setIsPlaying(true);
-      const res = await fetch('/api/questions/speak', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: question.text })
-      });
-      if (res.ok) {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const audio = new Audio(url);
-        audio.onended = () => setIsPlaying(false);
-        audio.play();
-      } else {
-        setIsPlaying(false);
-      }
-    } catch {
-      setIsPlaying(false);
-    }
   };
 
   const isCorrectOption = (opt: string) => {
@@ -129,11 +105,6 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
           </Button>
 
           <div className="flex-1" />
-
-          <Button variant="ghost" size="sm" onClick={handleSpeak} disabled={isPlaying} data-testid={`button-speak-${index}`}>
-            <Volume2 className={`w-4 h-4 mr-2 ${isPlaying ? "animate-pulse text-primary" : ""}`} />
-            {isPlaying ? "Playing..." : "Read Aloud"}
-          </Button>
 
           <Button variant="ghost" size="sm" onClick={handleCopy} data-testid={`button-copy-${index}`}>
             {copied ? <CheckCircle2 className="w-4 h-4 mr-2 text-green-500" /> : <Copy className="w-4 h-4 mr-2" />}
