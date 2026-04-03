@@ -1,8 +1,12 @@
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
+import path from "path";
+import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const app: Express = express();
 
@@ -30,5 +34,13 @@ app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 
 app.use("/api", router);
+
+// Serve the built React frontend (present when deployed as a single service)
+const publicDir = path.join(__dirname, "public");
+app.use(express.static(publicDir));
+// SPA fallback — send index.html for any non-API route
+app.get(/^(?!\/api).*/, (_req, res) => {
+  res.sendFile(path.join(publicDir, "index.html"));
+});
 
 export default app;

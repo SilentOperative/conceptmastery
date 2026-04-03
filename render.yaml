@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: smart-question-generator
+    runtime: node
+    buildCommand: bash render-build.sh
+    startCommand: node artifacts/api-server/dist/index.mjs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GROQ_API_KEY
+        sync: false
