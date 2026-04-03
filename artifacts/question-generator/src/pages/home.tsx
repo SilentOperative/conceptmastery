@@ -117,16 +117,18 @@ export default function Home() {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      <HistorySidebar
-        history={history}
-        onSelectSession={setCurrentSession}
-        onClearHistory={clearHistory}
-        onDeleteSession={deleteSession}
-        currentSessionId={currentSession?.id}
-      />
+    <div className="flex h-screen overflow-hidden bg-background print:block print:h-auto print:overflow-visible">
+      <div className="print:hidden">
+        <HistorySidebar
+          history={history}
+          onSelectSession={setCurrentSession}
+          onClearHistory={clearHistory}
+          onDeleteSession={deleteSession}
+          currentSessionId={currentSession?.id}
+        />
+      </div>
 
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative print:block print:h-auto print:overflow-visible">
         <header className="h-16 border-b bg-card flex items-center justify-between px-6 shrink-0 z-10 print:hidden">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shadow-sm">
