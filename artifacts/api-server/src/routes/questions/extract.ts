@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateWithImage } from "../../lib/gemini.js";
+import { generateWithImage } from "../../lib/groq.js";
 
 const router = Router();
 
@@ -34,9 +34,9 @@ Return ONLY the extracted question text in plain language. Do not add commentary
       res.status(429).json({
         error: "Gemini API quota exceeded — your API key's project has billing enabled, which sets free tier quota to 0. Please create a new key at https://aistudio.google.com/app/apikey choosing 'Create API key in new project'.",
       });
-    } else if (err?.status === 400) {
-      res.status(400).json({
-        error: "Your Gemini API key is expired or invalid. Please generate a fresh key at https://aistudio.google.com/app/apikey and update it in Replit Secrets.",
+    } else if (err?.status === 401) {
+      res.status(401).json({
+        error: "Your Groq API key is invalid. Please check it at https://console.groq.com and update it in Replit Secrets.",
       });
     } else {
       res.status(500).json({ error: "Failed to extract text from image" });
