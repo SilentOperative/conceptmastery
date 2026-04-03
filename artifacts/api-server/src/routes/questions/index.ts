@@ -70,7 +70,9 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
     let parsed_result;
     try {
       const cleaned = rawContent.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-      parsed_result = JSON.parse(cleaned);
+      // Fix unescaped LaTeX backslashes (e.g. \, \text \frac) that are invalid in JSON
+      const fixedJson = cleaned.replace(/\\([^"\\\/bfnrtu0-9])/g, "\\\\$1");
+      parsed_result = JSON.parse(fixedJson);
     } catch {
       req.log.error({ rawContent }, "Failed to parse AI response as JSON");
       res.status(500).json({ error: "Failed to parse AI response" });
