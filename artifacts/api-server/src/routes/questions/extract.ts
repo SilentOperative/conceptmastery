@@ -1,9 +1,7 @@
 import { Router } from "express";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateWithImage } from "../../lib/gemini.js";
 
 const router = Router();
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 router.post("/questions/extract-image", async (req, res) => {
   try {
@@ -27,25 +25,15 @@ If the image contains handwriting, interpret it carefully — common subjects ar
 
 Return ONLY the extracted question text in plain language. Do not add commentary, titles, or explanations.`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-
-    const result = await model.generateContent([
-      prompt,
-      {
-        inlineData: {
-          mimeType: mimeType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
-          data: imageBase64,
-        },
-      },
-    ]);
-
-    const text = result.response.text();
+    const text = await generateWithImage(prompt, imageBase64, mimeType, 1000);
     res.json({ text });
   } catch (error: unknown) {
     console.error("Image extraction error:", error);
-    const isQuota = error instanceof Error && error.message.includes("429");
+    const isQuota = (error as { status?: number })?.status === 429;
     if (isQuota) {
-      res.status(429).json({ error: "Gemini API quota exceeded. Please wait a moment and try again, or check your API key at https://aistudio.google.com/app/apikey" });
+      res.status(429).json({
+        error: "Gemini API quota exceeded. Please wait a moment and try again, or check your API key at https://aistudio.google.com/app/apikey",
+      });
     } else {
       res.status(500).json({ error: "Failed to extract text from image" });
     }

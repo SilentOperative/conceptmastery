@@ -1,10 +1,8 @@
 import { Router } from "express";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { generateText } from "../../lib/gemini.js";
 import { GenerateQuestionsBody } from "@workspace/api-zod";
 
 const router = Router();
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY ?? "");
 
 router.post("/questions/generate", async (req, res) => {
   try {
@@ -67,9 +65,7 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
   ]
 }`;
 
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
-    const result = await model.generateContent(prompt);
-    const rawContent = result.response.text();
+    const rawContent = await generateText(prompt, 4096);
 
     let parsed_result;
     try {
@@ -82,9 +78,16 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
     }
 
     res.json(parsed_result);
-  } catch (err) {
+  } catch (err: unknown) {
     req.log.error({ err }, "Error generating questions");
-    res.status(500).json({ error: "Failed to generate questions" });
+    const isQuota = (err as { status?: number })?.status === 429;
+    if (isQuota) {
+      res.status(429).json({
+        error: "Gemini API quota exceeded. Please wait a moment and try again.",
+      });
+    } else {
+      res.status(500).json({ error: "Failed to generate questions" });
+    }
   }
 });
 
