@@ -2,7 +2,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY ?? "";
 const BASE_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 const TEXT_MODEL = "llama-3.3-70b-versatile";
-const VISION_MODEL = "llama-3.2-11b-vision-preview";
+const VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 interface Message {
   role: "user" | "system";
