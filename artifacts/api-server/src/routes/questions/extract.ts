@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateWithImage } from "../../lib/openai.js";
+import { generateWithImage } from "../../lib/groq.js";
 
 const router = Router();
 
@@ -40,11 +40,11 @@ Return ONLY the extracted text exactly as it appears. No commentary, no added co
     const err = error as { status?: number; message?: string };
     if (err?.status === 429) {
       res.status(429).json({
-        error: "Gemini API quota exceeded — your API key's project has billing enabled, which sets free tier quota to 0. Please create a new key at https://aistudio.google.com/app/apikey choosing 'Create API key in new project'.",
+        error: "Groq API rate limit reached. Please wait a moment and try again.",
       });
     } else if (err?.status === 401) {
       res.status(401).json({
-        error: "Your Groq API key is invalid. Please check it at https://console.groq.com and update it in Replit Secrets.",
+        error: "Your Groq API key is invalid. Please check it at https://console.groq.com and update GROQ_API_KEY in Replit Secrets.",
       });
     } else {
       res.status(500).json({ error: "Failed to extract text from image" });

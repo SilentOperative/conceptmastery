@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { generateText } from "../../lib/openai.js";
+import { generateText } from "../../lib/groq.js";
 import { GenerateQuestionsBody } from "@workspace/api-zod";
 
 const router = Router();
@@ -108,7 +108,7 @@ Respond ONLY with this JSON structure (no markdown, no code blocks):
     const isQuota = (err as { status?: number })?.status === 429;
     if (isQuota) {
       res.status(429).json({
-        error: "Gemini API quota exceeded. Please wait a moment and try again.",
+        error: "Groq API rate limit reached. Please wait a moment and try again.",
       });
     } else {
       res.status(500).json({ error: "Failed to generate questions" });

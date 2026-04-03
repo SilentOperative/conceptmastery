@@ -83,10 +83,11 @@ export default function Home() {
           contentRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
       },
-      onError: (err) => {
+      onError: (err: unknown) => {
+        const errMsg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
         toast({
           title: "Failed to generate questions",
-          description: "There was an error connecting to the AI service. Please try again.",
+          description: errMsg || "There was an error connecting to the AI service. Please try again.",
           variant: "destructive"
         });
       }
