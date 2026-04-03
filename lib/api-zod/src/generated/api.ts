@@ -14,3 +14,49 @@ import * as zod from "zod";
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
 });
+
+/**
+ * Analyze question text and generate similar practice questions
+ * @summary Generate similar questions
+ */
+export const generateQuestionsBodyCountMin = 3;
+export const generateQuestionsBodyCountMax = 10;
+
+export const GenerateQuestionsBody = zod.object({
+  questionText: zod
+    .string()
+    .describe("The extracted question text from OCR or manual input"),
+  subject: zod
+    .enum(["Physics", "Chemistry", "Mathematics", "Biology", "General"])
+    .optional()
+    .describe("Subject filter"),
+  difficulty: zod
+    .enum(["Easy", "Medium", "Hard", "JEE Advanced"])
+    .optional()
+    .describe("Desired difficulty level"),
+  count: zod
+    .number()
+    .min(generateQuestionsBodyCountMin)
+    .max(generateQuestionsBodyCountMax)
+    .optional()
+    .describe("Number of questions to generate"),
+});
+
+export const GenerateQuestionsResponse = zod.object({
+  topic: zod.string().describe("Detected topic"),
+  subject: zod.string().describe("Detected subject"),
+  difficulty: zod.string().describe("Detected difficulty level"),
+  questions: zod.array(
+    zod.object({
+      id: zod.string(),
+      text: zod.string().describe("The question text"),
+      answer: zod.string().describe("The correct answer"),
+      solution: zod.string().describe("Step-by-step solution"),
+      difficulty: zod.enum(["Easy", "Medium", "Hard", "JEE Advanced"]),
+      options: zod
+        .array(zod.string())
+        .optional()
+        .describe("Multiple choice options (A, B, C, D)"),
+    }),
+  ),
+});

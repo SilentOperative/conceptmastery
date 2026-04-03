@@ -8,3 +8,82 @@
 export interface HealthStatus {
   status: string;
 }
+
+/**
+ * Subject filter
+ */
+export type GenerateQuestionsBodySubject =
+  (typeof GenerateQuestionsBodySubject)[keyof typeof GenerateQuestionsBodySubject];
+
+export const GenerateQuestionsBodySubject = {
+  Physics: "Physics",
+  Chemistry: "Chemistry",
+  Mathematics: "Mathematics",
+  Biology: "Biology",
+  General: "General",
+} as const;
+
+/**
+ * Desired difficulty level
+ */
+export type GenerateQuestionsBodyDifficulty =
+  (typeof GenerateQuestionsBodyDifficulty)[keyof typeof GenerateQuestionsBodyDifficulty];
+
+export const GenerateQuestionsBodyDifficulty = {
+  Easy: "Easy",
+  Medium: "Medium",
+  Hard: "Hard",
+  JEE_Advanced: "JEE Advanced",
+} as const;
+
+export interface GenerateQuestionsBody {
+  /** The extracted question text from OCR or manual input */
+  questionText: string;
+  /** Subject filter */
+  subject?: GenerateQuestionsBodySubject;
+  /** Desired difficulty level */
+  difficulty?: GenerateQuestionsBodyDifficulty;
+  /**
+   * Number of questions to generate
+   * @minimum 3
+   * @maximum 10
+   */
+  count?: number;
+}
+
+export type GeneratedQuestionDifficulty =
+  (typeof GeneratedQuestionDifficulty)[keyof typeof GeneratedQuestionDifficulty];
+
+export const GeneratedQuestionDifficulty = {
+  Easy: "Easy",
+  Medium: "Medium",
+  Hard: "Hard",
+  JEE_Advanced: "JEE Advanced",
+} as const;
+
+export interface GeneratedQuestion {
+  id: string;
+  /** The question text */
+  text: string;
+  /** The correct answer */
+  answer: string;
+  /** Step-by-step solution */
+  solution: string;
+  difficulty: GeneratedQuestionDifficulty;
+  /** Multiple choice options (A, B, C, D) */
+  options?: string[];
+}
+
+export interface GenerateQuestionsResponse {
+  /** Detected topic */
+  topic: string;
+  /** Detected subject */
+  subject: string;
+  /** Detected difficulty level */
+  difficulty: string;
+  questions: GeneratedQuestion[];
+}
+
+export interface ErrorResponse {
+  error: string;
+}

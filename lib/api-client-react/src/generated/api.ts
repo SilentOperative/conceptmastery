@@ -5,18 +5,26 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  ErrorResponse,
+  GenerateQuestionsBody,
+  GenerateQuestionsResponse,
+  HealthStatus,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -99,3 +107,90 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * Analyze question text and generate similar practice questions
+ * @summary Generate similar questions
+ */
+export const getGenerateQuestionsUrl = () => {
+  return `/api/questions/generate`;
+};
+
+export const generateQuestions = async (
+  generateQuestionsBody: GenerateQuestionsBody,
+  options?: RequestInit,
+): Promise<GenerateQuestionsResponse> => {
+  return customFetch<GenerateQuestionsResponse>(getGenerateQuestionsUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(generateQuestionsBody),
+  });
+};
+
+export const getGenerateQuestionsMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateQuestions>>,
+    TError,
+    { data: BodyType<GenerateQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof generateQuestions>>,
+  TError,
+  { data: BodyType<GenerateQuestionsBody> },
+  TContext
+> => {
+  const mutationKey = ["generateQuestions"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof generateQuestions>>,
+    { data: BodyType<GenerateQuestionsBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return generateQuestions(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type GenerateQuestionsMutationResult = NonNullable<
+  Awaited<ReturnType<typeof generateQuestions>>
+>;
+export type GenerateQuestionsMutationBody = BodyType<GenerateQuestionsBody>;
+export type GenerateQuestionsMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Generate similar questions
+ */
+export const useGenerateQuestions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof generateQuestions>>,
+    TError,
+    { data: BodyType<GenerateQuestionsBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof generateQuestions>>,
+  TError,
+  { data: BodyType<GenerateQuestionsBody> },
+  TContext
+> => {
+  return useMutation(getGenerateQuestionsMutationOptions(options));
+};

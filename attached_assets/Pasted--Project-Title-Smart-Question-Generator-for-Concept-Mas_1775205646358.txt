@@ -1,0 +1,102 @@
+ 
+
+**Project Title:** Smart Question Generator for Concept Mastery (Static Website)
+
+**Objective:**
+Create a fully responsive static website where students can upload, paste, or drag-and-drop a question image (e.g., JEE/NEET problems). The system should analyze the question and automatically generate similar practice questions to help students strengthen their concepts.
+
+---
+
+### 🧠 Core Features
+
+1. **Input Methods**
+
+   * Drag & Drop image upload
+   * Paste screenshot (Ctrl+V support)
+   * File upload button
+   * Optional: Text input for manually typing questions
+
+2. **Image Processing**
+
+   * Use OCR (e.g., Tesseract.js or any JS-based OCR library) to extract text from the image
+   * Clean and structure the extracted text
+
+3. **AI Question Generation**
+
+   * Use a free AI API (or mock logic if API not available)
+   * Analyze:
+
+     * Topic (e.g., Quadratic Equations, Thermodynamics)
+     * Difficulty level
+     * Question pattern
+   * Generate:
+
+     * 3–10 similar questions
+     * Slight variations in numbers, conditions, and logic
+     * Maintain same concept but different framing
+
+4. **Concept Tagging**
+
+   * Show detected topic (e.g., “Matrices – Determinants”)
+   * Show difficulty level (Easy / Medium / JEE Advanced level)
+
+5. **Answer & Solution (Optional but Powerful)**
+
+   * Provide answers for generated questions
+   * Step-by-step solution (if possible)
+
+6. **UI/UX**
+
+   * Clean student-friendly UI
+   * Sections:
+
+     * Upload Area
+     * Extracted Question Preview
+     * Generated Questions Section
+   * Add loading animation (“Analyzing your question…”)
+
+7. **Export Feature**
+
+   * Allow students to:
+
+     * Copy generated questions
+     * Download as image (PNG) or PDF
+
+8. **Voice Feature (Optional)**
+
+   * Use Web Speech API to read questions aloud
+
+---
+
+### ⚙️ Tech Stack Requirements
+
+* Pure Static Site (No backend required)
+* Use:
+
+  * HTML, CSS, JavaScript
+  * Puter.js (for AI API integration or fallback logic)
+  * Tesseract.js (for OCR)
+  * Canvas API (for image export)
+  * Web Speech API (for voice)
+
+---
+
+### 🧩 Extra Smart Features
+
+* “Generate More Variations” button
+* Difficulty slider (Easy → Advanced)
+* Topic filter (Physics / Chemistry / Math)
+* Save history in local storage
+
+---
+
+### 🎯 Expected Outcome
+
+A deployable static website (GitHub Pages compatible) where:
+
+* Student uploads a question image
+* AI understands it
+* Instantly generates similar practice questions
+* Helps in **learning by practice + pattern recognition**
+
+
