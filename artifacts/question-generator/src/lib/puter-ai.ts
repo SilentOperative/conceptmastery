@@ -57,13 +57,56 @@ export async function extractTextFromImage(imageBase64: string, mimeType: string
 
 function fixJsonBackslashes(raw: string): string {
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-  return cleaned
-    .replace(/\\t(?=[a-zA-Z])/g, "\\\\t")
-    .replace(/\\f(?=[a-zA-Z])/g, "\\\\f")
-    .replace(/\\n(?=[a-zA-Z])/g, "\\\\n")
-    .replace(/\\r(?=[a-zA-Z])/g, "\\\\r")
-    .replace(/\\b(?=[a-zA-Z])/g, "\\\\b")
-    .replace(/\\([^"\\\/bfnrtu0-9])/g, "\\\\$1");
+
+  let result = "";
+  let inString = false;
+  let i = 0;
+
+  while (i < cleaned.length) {
+    const ch = cleaned[i];
+
+    if (!inString) {
+      result += ch;
+      if (ch === '"') inString = true;
+      i++;
+    } else {
+      if (ch === "\\") {
+        const next = cleaned[i + 1];
+        if (
+          next === '"' || next === "\\" || next === "/" ||
+          next === "b" || next === "f" || next === "n" ||
+          next === "r" || next === "t"
+        ) {
+          result += ch + next;
+          i += 2;
+        } else if (next === "u") {
+          const hex = cleaned.substring(i + 2, i + 6);
+          if (/^[0-9a-fA-F]{4}$/.test(hex)) {
+            result += ch + next + hex;
+            i += 6;
+          } else {
+            result += "\\\\" + next;
+            i += 2;
+          }
+        } else if (next === undefined || next === "\n" || next === "\r") {
+          result += "\\\\";
+          i++;
+        } else {
+          result += "\\\\" + next;
+          i += 2;
+        }
+      } else if (ch === '"') {
+        result += ch;
+        inString = false;
+        i++;
+      } else {
+        result += ch;
+        i++;
+      }
+    }
+  }
+
+  return result;
 }
 
 export async function generateQuestions(
