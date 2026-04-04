@@ -1,4 +1,4 @@
-import type { GenerateQuestionsResult } from "../types";
+import type { GenerateQuestionsResult, GeneratedQuestion } from "../types";
 
 declare global {
   interface Window {
@@ -109,41 +109,33 @@ function fixJsonBackslashes(raw: string): string {
   return result;
 }
 
-function validateAndFixQuestions(result: GenerateQuestionsResult): GenerateQuestionsResult {
-  const fixed = result.questions.map((q) => {
-    if (!q.options || q.options.length === 0) return q;
+function parseJson<T>(raw: string): T {
+  return JSON.parse(fixJsonBackslashes(raw)) as T;
+}
 
-    const answerLetter = q.answer.match(/^([A-D])\)/)?.[1];
-    if (!answerLetter) return q;
+interface SolvedQuestion {
+  id: string;
+  text: string;
+  solution: string;
+  answer: string;
+  difficulty: string;
+}
 
-    const answerIndex = answerLetter.charCodeAt(0) - 65;
-    const matchingOption = q.options[answerIndex];
+interface Step1Result {
+  topic: string;
+  subject: string;
+  difficulty: string;
+  questions: SolvedQuestion[];
+}
 
-    if (!matchingOption) return q;
+interface Step2Question {
+  id: string;
+  options: string[];
+  answerLetter: string;
+}
 
-    const answerValue = q.answer.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
-    const optionValue = matchingOption.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
-
-    if (answerValue === optionValue) return q;
-
-    const foundIndex = q.options.findIndex((opt) => {
-      const optVal = opt.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
-      return optVal === answerValue;
-    });
-
-    if (foundIndex !== -1) {
-      const correctLetter = String.fromCharCode(65 + foundIndex);
-      return { ...q, answer: `${correctLetter}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}` };
-    }
-
-    const labels = ["A", "B", "C", "D"];
-    const newOptions = [...q.options];
-    const replaceIdx = answerIndex < newOptions.length ? answerIndex : 0;
-    newOptions[replaceIdx] = `${labels[replaceIdx]}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}`;
-    return { ...q, options: newOptions, answer: `${labels[replaceIdx]}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}` };
-  });
-
-  return { ...result, questions: fixed };
+interface Step2Result {
+  questions: Step2Question[];
 }
 
 export async function generateQuestions(
@@ -152,66 +144,128 @@ export async function generateQuestions(
   difficulty: string,
   count: number
 ): Promise<GenerateQuestionsResult> {
-  const prompt = `You are an expert educator for competitive exams like JEE and NEET.
-Your task is to generate ${count} new practice questions similar to the given question.
-Always respond with valid JSON only — no markdown, no explanation, no code blocks.
 
-SOURCE QUESTION:
+  // ── PASS 1: Generate questions and SOLVE them ──────────────────────────────
+  // No options yet — model focuses entirely on getting the math right.
+  const pass1Prompt = `You are an expert JEE/NEET educator and mathematician.
+
+SOURCE QUESTION (for style/topic reference only — do NOT reuse its numbers):
 "${questionText}"
 
-Subject hint: ${subject} | Difficulty hint: ${difficulty}
+Subject: ${subject} | Difficulty: ${difficulty}
 
-===== GENERATION RULES =====
+TASK: Create ${count} NEW practice questions on the same concept but with DIFFERENT numbers/values.
+For EACH question you MUST:
+1. Write the question clearly
+2. Work through the solution step-by-step showing all calculations
+3. State the final exact answer (a number, expression, or short value)
 
-STEP 1 — For each new question you create:
-  a) Choose different numbers, values, or a slightly different scenario from the source question
-  b) FULLY SOLVE the question yourself first — compute the exact numerical answer
-  c) Only after confirming the answer, create the 4 options
+CRITICAL JSON RULES:
+- Respond ONLY with valid JSON — no markdown, no extra text
+- Double ALL backslashes in strings: \\\\frac  \\\\sqrt  \\\\times  \\\\theta
+- Wrap math in dollar signs: $expression$
 
-STEP 2 — Build the 4 options:
-  - One option MUST be the exact correct answer you computed in step 1
-  - The other 3 options MUST be plausible but WRONG (common calculation mistakes, off-by-one, wrong formula result)
-  - Place the correct answer randomly in position A, B, C, or D
-  - The "answer" field MUST exactly match the option text of the correct option (same letter, same value)
-
-STEP 3 — Write the solution:
-  - Show working step by step that leads to the correct answer
-
-⚠ ABSOLUTE RULE: The correct answer MUST appear verbatim in the options array. Never list an answer that is not one of A/B/C/D.
-
-===== FORMATTING RULES =====
-
-JSON Escaping: ALL backslashes MUST be doubled in JSON strings.
-  - Write \\\\frac not \\frac, \\\\sqrt not \\sqrt, \\\\times not \\times
-
-Math: Use LaTeX wrapped in single dollar signs for inline math.
-  - Examples: $10^{-2}$, $\\\\frac{a}{b}$, $\\\\sqrt{3}$, $\\\\theta$, $\\\\pi$
-
-===== OUTPUT FORMAT =====
-
-Respond ONLY with this exact JSON structure:
+JSON format:
 {
-  "topic": "specific topic name",
+  "topic": "topic name",
   "subject": "Physics|Chemistry|Mathematics|Biology|General",
   "difficulty": "Easy|Medium|Hard|JEE Advanced",
   "questions": [
     {
       "id": "q1",
-      "text": "Full question text with $math$",
-      "options": ["A) value1", "B) value2", "C) value3", "D) value4"],
-      "answer": "C) value3",
-      "solution": "Step 1: ... Step 2: ... Final answer: value3",
+      "text": "Question text with $math$ notation",
+      "solution": "Step 1: ... Step 2: ... Therefore answer = X",
+      "answer": "exact final answer value only (e.g. 233, 52, $\\\\frac{3}{4}$)",
       "difficulty": "Easy|Medium|Hard|JEE Advanced"
     }
   ]
-}
+}`;
 
-The "answer" field must match EXACTLY one entry in the "options" array (same letter, same text).`;
+  const r1 = await window.puter.ai.chat(pass1Prompt, { model: "gpt-4o-mini" });
+  const step1 = parseJson<Step1Result>(getPuterContent(r1));
 
-  const response = await window.puter.ai.chat(prompt, { model: "gpt-4o-mini" });
-  const rawContent = getPuterContent(response);
+  if (!step1.questions || step1.questions.length === 0) {
+    throw new Error("AI did not return any questions in pass 1.");
+  }
 
-  const fixedJson = fixJsonBackslashes(rawContent);
-  const parsed = JSON.parse(fixedJson) as GenerateQuestionsResult;
-  return validateAndFixQuestions(parsed);
+  // ── PASS 2: Generate 3 wrong distractors for each solved question ──────────
+  // The correct answer is already known — model only needs to invent plausible wrong ones.
+  const questionsList = step1.questions
+    .map((q) => `ID: ${q.id}\nQuestion: ${q.text}\nCORRECT ANSWER: ${q.answer}`)
+    .join("\n\n");
+
+  const pass2Prompt = `You are creating multiple-choice distractors for JEE/NEET questions.
+
+For each question below, you know the CORRECT ANSWER. Your job is to create 3 WRONG options that look plausible (typical calculation mistakes, sign errors, off-by-one, wrong formula, etc.).
+
+Then arrange ALL 4 options (3 wrong + 1 correct) in a random order across positions A, B, C, D.
+
+QUESTIONS:
+${questionsList}
+
+CRITICAL JSON RULES:
+- Respond ONLY with valid JSON — no markdown, no extra text
+- Double ALL backslashes: \\\\frac  \\\\sqrt  \\\\times
+- Wrap math in dollar signs: $expression$
+- "answerLetter" must be exactly which letter (A/B/C/D) holds the correct answer
+
+JSON format:
+{
+  "questions": [
+    {
+      "id": "q1",
+      "options": ["A) value", "B) value", "C) value", "D) value"],
+      "answerLetter": "B"
+    }
+  ]
+}`;
+
+  const r2 = await window.puter.ai.chat(pass2Prompt, { model: "gpt-4o-mini" });
+  const step2 = parseJson<Step2Result>(getPuterContent(r2));
+
+  // ── COMBINE: merge solutions from pass 1 with options from pass 2 ──────────
+  const optionsMap = new Map<string, Step2Question>();
+  for (const q of step2.questions ?? []) {
+    optionsMap.set(q.id, q);
+  }
+
+  const combined: GeneratedQuestion[] = step1.questions.map((sq) => {
+    const opts = optionsMap.get(sq.id);
+
+    let options: string[] = [];
+    let answer = sq.answer;
+
+    if (opts && opts.options && opts.options.length === 4 && opts.answerLetter) {
+      options = opts.options;
+      const letter = opts.answerLetter.toUpperCase();
+      const idx = letter.charCodeAt(0) - 65;
+      const optionValue = options[idx]?.replace(/^[A-D]\)\s*/, "").trim() ?? sq.answer;
+      answer = `${letter}) ${optionValue}`;
+    } else {
+      // Fallback: put correct answer as option A if pass 2 failed
+      options = [
+        `A) ${sq.answer}`,
+        "B) Cannot be determined",
+        "C) None of these",
+        "D) Insufficient data",
+      ];
+      answer = `A) ${sq.answer}`;
+    }
+
+    return {
+      id: sq.id,
+      text: sq.text,
+      options,
+      answer,
+      solution: sq.solution,
+      difficulty: sq.difficulty,
+    };
+  });
+
+  return {
+    topic: step1.topic,
+    subject: step1.subject,
+    difficulty: step1.difficulty,
+    questions: combined,
+  };
 }
