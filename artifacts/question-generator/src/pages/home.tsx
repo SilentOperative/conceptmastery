@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
 import { Textarea } from "@/components/ui/textarea";
-import { Download, Copy, Sparkles, AlertCircle, BookOpen, Menu, History } from "lucide-react";
+import { Download, Copy, Sparkles, AlertCircle, BookOpen, Menu, History, TriangleAlert } from "lucide-react";
 import { GeneratingProgress } from "@/components/GeneratingProgress";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -231,6 +231,13 @@ export default function Home() {
                       </div>
                     </div>
 
+                    {difficulty === "JEE Advanced" && (
+                      <div className="flex gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300">
+                        <TriangleAlert className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                        <span>JEE Advanced questions involve complex multi-step math. AI may make calculation errors — always verify solutions yourself.</span>
+                      </div>
+                    )}
+
                     <div className="space-y-4">
                       <div className="flex justify-between items-center">
                         <Label>Question Count</Label>
@@ -301,6 +308,15 @@ export default function Home() {
                     {currentSession.subject} • {currentSession.difficulty} • Generated on {new Date().toLocaleDateString()}
                   </p>
                 </div>
+
+                {currentSession.difficulty === "JEE Advanced" && (
+                  <div className="flex gap-3 p-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-sm text-amber-800 dark:text-amber-300 mb-4 print:hidden">
+                    <TriangleAlert className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-semibold">JEE Advanced accuracy notice:</span> These questions involve complex multi-step mathematics. AI models (including GPT-4o-mini) can make calculation errors on JEE Advanced level problems. Always cross-check the solutions and answers with a trusted source before relying on them.
+                    </div>
+                  </div>
+                )}
 
                 <div className="space-y-4 md:space-y-6">
                   {currentSession.questions.map((q: GeneratedQuestion, i: number) => (

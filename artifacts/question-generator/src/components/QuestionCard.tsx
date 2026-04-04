@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { MathText } from "@/components/MathText";
-import { Copy, CheckCircle2, Eye, EyeOff, Lightbulb } from "lucide-react";
+import { Copy, CheckCircle2, Eye, EyeOff, Lightbulb, ListChecks } from "lucide-react";
 
 interface QuestionCardProps {
   question: GeneratedQuestion;
@@ -28,28 +28,53 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
     if (question.options && question.options.length > 0) {
       text += question.options.join("\n") + "\n\n";
     }
+    if (question.multipleCorrect) {
+      text += `[One or more options may be correct]\n`;
+    }
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const isCorrectOption = (opt: string) => {
+  const isCorrectOption = (opt: string): boolean => {
     if (!showAnswer) return false;
+
+    if (question.answers && question.answers.length > 0) {
+      const optLetter = opt.match(/^([A-D])\)/)?.[1];
+      if (!optLetter) return false;
+      return question.answers.some((ans) => {
+        const ansLetter = ans.match(/^([A-D])\)/)?.[1];
+        return ansLetter === optLetter;
+      });
+    }
+
     const optLetter = opt.match(/^([A-D])\)/)?.[1];
-    const ansLetter = question.answer.match(/^([A-D])\)/)?.[1];
-    return optLetter && ansLetter && optLetter === ansLetter;
+    const correctLetters = question.answer.split(",").map((a) => a.trim().match(/^([A-D])/)?.[1]).filter(Boolean);
+    return !!optLetter && correctLetters.includes(optLetter);
   };
 
+  const correctCount = question.answers?.length ?? 1;
+
   return (
-    <Card className="w-full mb-6 print:break-inside-avoid print:shadow-none print:border-gray-200" data-testid={`card-question-${index}`}>
-      <CardHeader className="pb-3 flex flex-row items-start justify-between gap-4">
+    <Card className="w-full mb-4 md:mb-6 print:break-inside-avoid print:shadow-none print:border-gray-200" data-testid={`card-question-${index}`}>
+      <CardHeader className="pb-3 flex flex-row items-start justify-between gap-3">
         <div className="flex gap-3 flex-1 min-w-0">
           <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary font-bold text-sm shrink-0 mt-0.5">
             {index + 1}
           </div>
-          <CardTitle className="text-base leading-relaxed font-medium">
-            <MathText text={question.text} />
-          </CardTitle>
+          <div className="flex-1 min-w-0">
+            <CardTitle className="text-base leading-relaxed font-medium">
+              <MathText text={question.text} />
+            </CardTitle>
+            {question.multipleCorrect && (
+              <div className="flex items-center gap-1.5 mt-2">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 border border-violet-200 dark:border-violet-800">
+                  <ListChecks className="w-3 h-3" />
+                  One or more options correct
+                </span>
+              </div>
+            )}
+          </div>
         </div>
         <Badge variant="outline" className={`shrink-0 text-xs ${difficultyColors[question.difficulty] ?? ""}`} data-testid={`badge-difficulty-${index}`}>
           {question.difficulty}
@@ -66,14 +91,17 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
                   key={i}
                   className={`p-3 rounded-md border text-sm transition-colors min-w-0 overflow-hidden break-words ${
                     correct
-                      ? "bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-700"
+                      ? "bg-green-50 border-green-300 dark:bg-green-900/20 dark:border-green-700 ring-1 ring-green-300 dark:ring-green-700"
                       : "bg-secondary/30 border-border"
                   }`}
                 >
-                  <span className="font-semibold mr-2 text-muted-foreground">
+                  <span className={`font-semibold mr-2 ${correct ? "text-green-700 dark:text-green-400" : "text-muted-foreground"}`}>
                     {String.fromCharCode(65 + i)})
                   </span>
                   <MathText text={opt.replace(/^[A-D]\)\s*/i, "")} />
+                  {correct && showAnswer && (
+                    <CheckCircle2 className="inline-block ml-1.5 w-3.5 h-3.5 text-green-600 dark:text-green-400 align-text-bottom" />
+                  )}
                 </div>
               );
             })}
@@ -115,8 +143,18 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
 
         {showAnswer && (
           <div className="w-full p-4 rounded-md bg-primary/5 border border-primary/10 text-sm animate-in fade-in slide-in-from-top-2" data-testid={`text-answer-${index}`}>
-            <span className="font-semibold text-primary mr-2">Correct Answer:</span>
-            <MathText text={question.answer} />
+            <span className="font-semibold text-primary mr-2">
+              {question.multipleCorrect ? `Correct Answers (${correctCount}):` : "Correct Answer:"}
+            </span>
+            {question.answers && question.answers.length > 0 ? (
+              <span className="font-medium">
+                {question.answers.map((a) => a.match(/^([A-D])/)?.[1] ?? a).join(", ")}
+                {" — "}
+                {question.answers.map((a) => <MathText key={a} text={a.replace(/^[A-D]\)\s*/, "")} />)}
+              </span>
+            ) : (
+              <MathText text={question.answer} />
+            )}
           </div>
         )}
 

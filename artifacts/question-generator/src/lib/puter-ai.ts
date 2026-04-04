@@ -57,14 +57,12 @@ export async function extractTextFromImage(imageBase64: string, mimeType: string
 
 function fixJsonBackslashes(raw: string): string {
   const cleaned = raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
-
   let result = "";
   let inString = false;
   let i = 0;
 
   while (i < cleaned.length) {
     const ch = cleaned[i];
-
     if (!inString) {
       result += ch;
       if (ch === '"') inString = true;
@@ -72,11 +70,9 @@ function fixJsonBackslashes(raw: string): string {
     } else {
       if (ch === "\\") {
         const next = cleaned[i + 1];
-        if (
-          next === '"' || next === "\\" || next === "/" ||
-          next === "b" || next === "f" || next === "n" ||
-          next === "r" || next === "t"
-        ) {
+        if (next === '"' || next === "\\" || next === "/" ||
+            next === "b" || next === "f" || next === "n" ||
+            next === "r" || next === "t") {
           result += ch + next;
           i += 2;
         } else if (next === "u") {
@@ -105,7 +101,6 @@ function fixJsonBackslashes(raw: string): string {
       }
     }
   }
-
   return result;
 }
 
@@ -117,7 +112,8 @@ interface SolvedQuestion {
   id: string;
   text: string;
   solution: string;
-  answer: string;
+  answers: string[];
+  multipleCorrect: boolean;
   difficulty: string;
 }
 
@@ -131,7 +127,7 @@ interface Step1Result {
 interface Step2Question {
   id: string;
   options: string[];
-  answerLetter: string;
+  answerLetters: string[];
 }
 
 interface Step2Result {
@@ -144,9 +140,17 @@ export async function generateQuestions(
   difficulty: string,
   count: number
 ): Promise<GenerateQuestionsResult> {
+  const isJeeAdvanced = difficulty === "JEE Advanced";
 
-  // ── PASS 1: Generate questions and SOLVE them ──────────────────────────────
-  // No options yet — model focuses entirely on getting the math right.
+  // ── PASS 1: Generate questions and SOLVE them (no options yet) ─────────────
+  const multiAnswerNote = isJeeAdvanced
+    ? `IMPORTANT — JEE Advanced has two question types:
+- Type 1 (Single correct): exactly 1 correct option
+- Type 2 (Multiple correct): 2 or more correct options (mark multipleCorrect: true)
+Mix both types: roughly half single-correct, half multiple-correct.
+For multiple-correct questions, list ALL correct answer values in the "answers" array.`
+    : `All questions are single-correct: the "answers" array has exactly 1 element.`;
+
   const pass1Prompt = `You are an expert JEE/NEET educator and mathematician.
 
 SOURCE QUESTION (for style/topic reference only — do NOT reuse its numbers):
@@ -154,15 +158,17 @@ SOURCE QUESTION (for style/topic reference only — do NOT reuse its numbers):
 
 Subject: ${subject} | Difficulty: ${difficulty}
 
+${multiAnswerNote}
+
 TASK: Create ${count} NEW practice questions on the same concept but with DIFFERENT numbers/values.
 For EACH question you MUST:
 1. Write the question clearly
-2. Work through the solution step-by-step showing all calculations
-3. State the final exact answer (a number, expression, or short value)
+2. Work through the complete solution step-by-step showing all calculations
+3. State ALL correct answer values (just the values, no A/B/C/D letters yet)
 
 CRITICAL JSON RULES:
 - Respond ONLY with valid JSON — no markdown, no extra text
-- Double ALL backslashes in strings: \\\\frac  \\\\sqrt  \\\\times  \\\\theta
+- Double ALL backslashes: \\\\frac  \\\\sqrt  \\\\times  \\\\theta
 - Wrap math in dollar signs: $expression$
 
 JSON format:
@@ -173,9 +179,10 @@ JSON format:
   "questions": [
     {
       "id": "q1",
-      "text": "Question text with $math$ notation",
-      "solution": "Step 1: ... Step 2: ... Therefore answer = X",
-      "answer": "exact final answer value only (e.g. 233, 52, $\\\\frac{3}{4}$)",
+      "text": "Question text with $math$",
+      "solution": "Step 1: ... Step 2: ... Therefore answer(s) = ...",
+      "answers": ["correct value 1", "correct value 2"],
+      "multipleCorrect": false,
       "difficulty": "Easy|Medium|Hard|JEE Advanced"
     }
   ]
@@ -188,17 +195,21 @@ JSON format:
     throw new Error("AI did not return any questions in pass 1.");
   }
 
-  // ── PASS 2: Generate 3 wrong distractors for each solved question ──────────
-  // The correct answer is already known — model only needs to invent plausible wrong ones.
-  const questionsList = step1.questions
-    .map((q) => `ID: ${q.id}\nQuestion: ${q.text}\nCORRECT ANSWER: ${q.answer}`)
-    .join("\n\n");
+  // ── PASS 2: Generate options (correct + distractors) ──────────────────────
+  const questionsList = step1.questions.map((q) => {
+    const answersStr = q.answers.map((a, i) => `Correct answer ${i + 1}: ${a}`).join("\n");
+    const type = q.multipleCorrect
+      ? "MULTIPLE-CORRECT (2+ options will be correct)"
+      : "SINGLE-CORRECT (exactly 1 option will be correct)";
+    return `ID: ${q.id}\nType: ${type}\nQuestion: ${q.text}\n${answersStr}`;
+  }).join("\n\n---\n\n");
 
-  const pass2Prompt = `You are creating multiple-choice distractors for JEE/NEET questions.
+  const pass2Prompt = `You are creating multiple-choice options for JEE/NEET questions.
 
-For each question below, you know the CORRECT ANSWER. Your job is to create 3 WRONG options that look plausible (typical calculation mistakes, sign errors, off-by-one, wrong formula, etc.).
-
-Then arrange ALL 4 options (3 wrong + 1 correct) in a random order across positions A, B, C, D.
+For each question you are given the TYPE and the CORRECT ANSWER VALUE(S).
+Your job:
+- For SINGLE-CORRECT: place the 1 correct value at a random position (A/B/C/D), fill the other 3 with plausible wrong values
+- For MULTIPLE-CORRECT: place ALL correct values at different random positions, fill remaining positions with plausible wrong values
 
 QUESTIONS:
 ${questionsList}
@@ -207,7 +218,7 @@ CRITICAL JSON RULES:
 - Respond ONLY with valid JSON — no markdown, no extra text
 - Double ALL backslashes: \\\\frac  \\\\sqrt  \\\\times
 - Wrap math in dollar signs: $expression$
-- "answerLetter" must be exactly which letter (A/B/C/D) holds the correct answer
+- "answerLetters" must list ALL letters that are correct (e.g. ["A","C"] for multiple-correct)
 
 JSON format:
 {
@@ -215,7 +226,7 @@ JSON format:
     {
       "id": "q1",
       "options": ["A) value", "B) value", "C) value", "D) value"],
-      "answerLetter": "B"
+      "answerLetters": ["B"]
     }
   ]
 }`;
@@ -231,34 +242,53 @@ JSON format:
 
   const combined: GeneratedQuestion[] = step1.questions.map((sq) => {
     const opts = optionsMap.get(sq.id);
+    const multipleCorrect = sq.multipleCorrect ?? false;
 
-    let options: string[] = [];
-    let answer = sq.answer;
+    if (opts && opts.options?.length === 4 && opts.answerLetters?.length > 0) {
+      const options = opts.options;
+      const letters = opts.answerLetters.map((l) => l.toUpperCase());
 
-    if (opts && opts.options && opts.options.length === 4 && opts.answerLetter) {
-      options = opts.options;
-      const letter = opts.answerLetter.toUpperCase();
-      const idx = letter.charCodeAt(0) - 65;
-      const optionValue = options[idx]?.replace(/^[A-D]\)\s*/, "").trim() ?? sq.answer;
-      answer = `${letter}) ${optionValue}`;
-    } else {
-      // Fallback: put correct answer as option A if pass 2 failed
-      options = [
-        `A) ${sq.answer}`,
-        "B) Cannot be determined",
-        "C) None of these",
-        "D) Insufficient data",
-      ];
-      answer = `A) ${sq.answer}`;
+      const correctOptions = letters
+        .map((letter) => {
+          const idx = letter.charCodeAt(0) - 65;
+          return options[idx] ?? null;
+        })
+        .filter(Boolean) as string[];
+
+      const answer = letters.sort().join(", ");
+      const answers = correctOptions;
+
+      return {
+        id: sq.id,
+        text: sq.text,
+        options,
+        answer,
+        answers,
+        solution: sq.solution,
+        difficulty: sq.difficulty,
+        multipleCorrect,
+      };
     }
 
+    // Fallback if pass 2 failed
+    const fallbackOptions: string[] = [];
+    const labels = ["A", "B", "C", "D"];
+    sq.answers.forEach((val, i) => {
+      if (i < 4) fallbackOptions.push(`${labels[i]}) ${val}`);
+    });
+    while (fallbackOptions.length < 4) {
+      fallbackOptions.push(`${labels[fallbackOptions.length]}) —`);
+    }
+    const fallbackLetters = sq.answers.map((_, i) => labels[i]).slice(0, 4);
     return {
       id: sq.id,
       text: sq.text,
-      options,
-      answer,
+      options: fallbackOptions,
+      answer: fallbackLetters.join(", "),
+      answers: fallbackOptions.slice(0, sq.answers.length),
       solution: sq.solution,
       difficulty: sq.difficulty,
+      multipleCorrect,
     };
   });
 

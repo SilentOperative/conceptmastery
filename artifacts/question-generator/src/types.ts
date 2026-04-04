@@ -3,8 +3,10 @@ export interface GeneratedQuestion {
   text: string;
   options?: string[];
   answer: string;
+  answers?: string[];
   solution: string;
   difficulty: string;
+  multipleCorrect?: boolean;
 }
 
 export type Subject = "Physics" | "Chemistry" | "Mathematics" | "Biology" | "General";
