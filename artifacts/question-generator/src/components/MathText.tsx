@@ -84,7 +84,9 @@ function escapeHtml(str: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+    .replace(/'/g, "&#39;")
+    .replace(/\\n/g, "<br>")
+    .replace(/\n/g, "<br>");
 }
 
 export function MathText({ text, className = "", block = false }: MathTextProps) {

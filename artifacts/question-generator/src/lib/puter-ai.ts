@@ -180,7 +180,7 @@ JSON format:
     {
       "id": "q1",
       "text": "Question text with $math$",
-      "solution": "Step 1: ... Step 2: ... Therefore answer(s) = ...",
+      "solution": "Step 1: ...\nStep 2: ...\nTherefore answer(s) = ...",
       "answers": ["correct value 1", "correct value 2"],
       "multipleCorrect": false,
       "difficulty": "Easy|Medium|Hard|JEE Advanced"

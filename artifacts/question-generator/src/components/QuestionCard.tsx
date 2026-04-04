@@ -159,9 +159,9 @@ export function QuestionCard({ question, index }: QuestionCardProps) {
         )}
 
         {showSolution && (
-          <div className="w-full p-4 rounded-md bg-secondary/50 border text-sm animate-in fade-in slide-in-from-top-2 leading-relaxed" data-testid={`text-solution-${index}`}>
+          <div className="w-full p-4 rounded-md bg-secondary/50 border text-sm animate-in fade-in slide-in-from-top-2" data-testid={`text-solution-${index}`}>
             <span className="font-semibold mb-3 block">Step-by-step Solution:</span>
-            <MathText text={question.solution} block className="solution-math space-y-1" />
+            <MathText text={question.solution} block className="solution-math leading-relaxed [&_br]:block [&_br]:mb-2" />
           </div>
         )}
       </CardFooter>
