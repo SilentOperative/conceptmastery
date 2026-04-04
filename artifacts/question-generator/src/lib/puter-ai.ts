@@ -35,8 +35,6 @@ STRICT RULES:
 - Never guess or hallucinate content — only transcribe what you can clearly see
 - If the image only shows a question with no options, output ONLY the question text
 
-If the image contains handwriting, interpret it carefully — common subjects are Physics, Chemistry, and Mathematics for JEE/NEET exams.
-
 Return ONLY the extracted text exactly as it appears. No commentary, no added content, no answers.`;
 
 export async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
@@ -108,6 +106,41 @@ function parseJson<T>(raw: string): T {
   return JSON.parse(fixJsonBackslashes(raw)) as T;
 }
 
+// Deterministically build options from correct answers + distractors.
+// The AI never touches placement — code does it randomly but verifiably.
+function buildOptions(correctValues: string[], distractors: string[]): {
+  options: string[];
+  answerLetters: string[];
+  correctOptionStrings: string[];
+} {
+  const LABELS = ["A", "B", "C", "D"];
+  const needed = Math.min(correctValues.length, 4);
+  const wrongNeeded = 4 - needed;
+  const wrongs = distractors.slice(0, wrongNeeded);
+
+  // Combine correct + wrong values
+  const pool: Array<{ value: string; correct: boolean }> = [
+    ...correctValues.slice(0, needed).map((v) => ({ value: v, correct: true })),
+    ...wrongs.map((v) => ({ value: v, correct: false })),
+  ];
+
+  // Fisher-Yates shuffle
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+
+  const options = pool.map((item, i) => `${LABELS[i]}) ${item.value}`);
+  const answerLetters = pool
+    .map((item, i) => (item.correct ? LABELS[i] : null))
+    .filter(Boolean) as string[];
+  const correctOptionStrings = pool
+    .map((item, i) => (item.correct ? `${LABELS[i]}) ${item.value}` : null))
+    .filter(Boolean) as string[];
+
+  return { options, answerLetters, correctOptionStrings };
+}
+
 interface SolvedQuestion {
   id: string;
   text: string;
@@ -127,22 +160,17 @@ interface Step1Result {
 interface VerifiedQuestion {
   id: string;
   verified_answers: string[];
-  confidence: "high" | "medium" | "low";
-  note?: string;
 }
-
 interface VerifyResult {
   questions: VerifiedQuestion[];
 }
 
-interface Step2Question {
+interface DistractorQuestion {
   id: string;
-  options: string[];
-  answerLetters: string[];
+  distractors: string[];
 }
-
-interface Step2Result {
-  questions: Step2Question[];
+interface DistractorResult {
+  questions: DistractorQuestion[];
 }
 
 export async function generateQuestions(
@@ -152,62 +180,58 @@ export async function generateQuestions(
   count: number
 ): Promise<GenerateQuestionsResult> {
   const isJeeAdvanced = difficulty === "JEE Advanced";
-
-  // Use gpt-4o for JEE Advanced — significantly more accurate for complex math
   const solveModel = isJeeAdvanced ? "gpt-4o" : "gpt-4o-mini";
-  const optionsModel = "gpt-4o-mini";
 
-  // ── PASS 1: Generate questions and SOLVE them fully ────────────────────────
+  // ── PASS 1: Generate questions and solve them ──────────────────────────────
   const multiAnswerNote = isJeeAdvanced
-    ? `JEE Advanced question types:
-- Type 1 (Single correct): exactly 1 correct option. Set multipleCorrect: false.
-- Type 2 (Multiple correct): 2 or more options are correct. Set multipleCorrect: true.
-Mix both types across the ${count} questions. For multiple-correct, list ALL correct answer values.`
-    : `Single-correct only: "answers" array has exactly 1 element. multipleCorrect: false.`;
+    ? `JEE Advanced has two types:
+- Single correct (multipleCorrect: false): exactly 1 correct answer
+- Multiple correct (multipleCorrect: true): 2+ correct answers
+Mix both types. For multiple-correct, list ALL correct values in "answers".`
+    : `Single-correct only. "answers" has exactly 1 element. multipleCorrect: false.`;
 
-  const solveDepth = isJeeAdvanced
-    ? `SOLVING REQUIREMENTS (JEE Advanced — be extremely careful):
-- Write out EVERY arithmetic and algebraic step explicitly. Do NOT skip steps.
-- Show intermediate numerical values at each stage (e.g. "= 3 × 4 = 12").
-- After reaching your answer, VERIFY it by substituting back or checking with an alternate method.
-- Only then write the final answer into the "answers" array.`
-    : `Solve each question step by step and state the final answer clearly.`;
+  const solveNote = isJeeAdvanced
+    ? `You are solving JEE Advanced level problems. Be extremely careful:
+- Write EVERY arithmetic step explicitly with intermediate values
+- Do NOT skip any calculation steps
+- After getting an answer, verify it by an alternate method or substitution
+- Choose numbers that give clean integer or simple fraction answers`
+    : `Solve step by step. Choose numbers that give clean integer answers.`;
 
-  const pass1Prompt = `You are a highly accurate JEE/NEET mathematics and science expert.
+  const pass1Prompt = `You are an expert JEE/NEET mathematics and science teacher.
 
-SOURCE QUESTION (topic/style reference only — use DIFFERENT numbers):
+SOURCE QUESTION (topic reference only — use DIFFERENT numbers):
 "${questionText}"
 
 Subject: ${subject} | Difficulty: ${difficulty}
 
 ${multiAnswerNote}
 
-${solveDepth}
+${solveNote}
 
-Create ${count} NEW practice questions on the same concept with different values. For each:
-1. Write the question text clearly with proper math notation
-2. Solve it completely step by step (show every calculation)
-3. State the exact final answer value(s)
+Create ${count} NEW practice questions on the same concept with different values.
+For each question:
+1. Write the question clearly with math notation
+2. Solve it completely showing ALL steps
+3. State the exact final answer value(s) — just the numerical values, no A/B/C/D
 
 CRITICAL JSON RULES:
-- Output ONLY valid JSON — no markdown fences, no prose
-- Double ALL backslashes inside strings: \\\\frac \\\\sqrt \\\\times \\\\theta \\\\pi
-- Wrap all math in dollar signs: $expression$
-- Use \\n between steps in the solution string
+- Output ONLY valid JSON — no markdown, no prose
+- Double ALL backslashes: \\\\frac \\\\sqrt \\\\times \\\\theta \\\\pi
+- Wrap math in dollar signs: $expression$
 
-JSON format:
 {
-  "topic": "specific topic",
+  "topic": "topic name",
   "subject": "Physics|Chemistry|Mathematics|Biology|General",
   "difficulty": "Easy|Medium|Hard|JEE Advanced",
   "questions": [
     {
       "id": "q1",
       "text": "Question with $math$",
-      "solution": "Step 1: ...\\nStep 2: ...\\nVerification: ...\\nAnswer: ...",
-      "answers": ["exact value"],
+      "solution": "Step 1: ...\\nStep 2: ...\\nAnswer: ...",
+      "answers": ["value"],
       "multipleCorrect": false,
-      "difficulty": "JEE Advanced"
+      "difficulty": "Easy|Medium|Hard|JEE Advanced"
     }
   ]
 }`;
@@ -215,29 +239,23 @@ JSON format:
   const r1 = await window.puter.ai.chat(pass1Prompt, { model: solveModel });
   const step1 = parseJson<Step1Result>(getPuterContent(r1));
 
-  if (!step1.questions || step1.questions.length === 0) {
-    throw new Error("AI did not return any questions in pass 1.");
+  if (!step1.questions?.length) {
+    throw new Error("AI did not return any questions.");
   }
 
-  // ── PASS 2 (JEE Advanced only): Independent verification ──────────────────
-  // A separate model instance re-solves each question cold to catch errors.
-  let verifiedAnswers: Map<string, string[]> | null = null;
+  // ── PASS 2 (JEE Advanced): Independent verification ───────────────────────
+  let resolvedQuestions = step1.questions;
 
   if (isJeeAdvanced) {
     const verifyList = step1.questions
-      .map((q) => `ID: ${q.id}\nQuestion: ${q.text}\nPrevious answer(s): ${q.answers.join(", ")}`)
+      .map((q) => `ID: ${q.id}\nQuestion: ${q.text}`)
       .join("\n\n---\n\n");
 
-    const verifyPrompt = `You are an independent math checker for JEE Advanced problems.
+    const verifyPrompt = `You are an independent math expert checking JEE Advanced problems.
 
-For each question below:
-1. Solve it yourself completely from scratch — ignore the "Previous answer" shown.
-2. Compare your answer with the "Previous answer".
-3. Report which answer is correct.
+For each question below, solve it completely from scratch on your own.
+Show your working. State the final answer value(s).
 
-Be extremely careful with arithmetic. Show your working internally and only report the final verified answer.
-
-QUESTIONS:
 ${verifyList}
 
 Output ONLY valid JSON:
@@ -245,8 +263,7 @@ Output ONLY valid JSON:
   "questions": [
     {
       "id": "q1",
-      "verified_answers": ["correct value"],
-      "confidence": "high|medium|low"
+      "verified_answers": ["value"]
     }
   ]
 }`;
@@ -254,114 +271,76 @@ Output ONLY valid JSON:
     try {
       const rv = await window.puter.ai.chat(verifyPrompt, { model: "gpt-4o" });
       const verify = parseJson<VerifyResult>(getPuterContent(rv));
-      if (verify.questions?.length > 0) {
-        verifiedAnswers = new Map();
-        for (const vq of verify.questions) {
-          if (vq.verified_answers?.length > 0) {
-            verifiedAnswers.set(vq.id, vq.verified_answers);
+      const vMap = new Map(verify.questions?.map((q) => [q.id, q.verified_answers]) ?? []);
+
+      resolvedQuestions = step1.questions.map((q) => {
+        const va = vMap.get(q.id);
+        if (va?.length) {
+          // Both passes agreed → high confidence; use verified answer
+          const pass1Norm = q.answers.map((a) => a.trim().toLowerCase()).join(",");
+          const pass2Norm = va.map((a) => a.trim().toLowerCase()).join(",");
+          // If they agree use pass2 (verified), otherwise keep pass1 with both noted in solution
+          if (pass1Norm === pass2Norm) {
+            return { ...q, answers: va };
+          } else {
+            // Disagreement: trust the verifier (gpt-4o second opinion)
+            return {
+              ...q,
+              answers: va,
+              solution: q.solution + `\n\n[Verified answer: ${va.join(", ")}]`,
+            };
           }
         }
-      }
+        return q;
+      });
     } catch {
       // Verification failed — continue with pass 1 answers
     }
   }
 
-  // Apply verified answers where confidence warrants it
-  const resolvedQuestions = step1.questions.map((q) => {
-    if (verifiedAnswers) {
-      const vAnswers = verifiedAnswers.get(q.id);
-      if (vAnswers && vAnswers.length > 0) {
-        return { ...q, answers: vAnswers };
-      }
-    }
-    return q;
-  });
-
-  // ── PASS 3: Build multiple-choice options ──────────────────────────────────
-  const questionsList = resolvedQuestions.map((q) => {
-    const answersStr = q.answers.map((a, i) => `Correct answer ${i + 1}: ${a}`).join("\n");
-    const type = q.multipleCorrect
-      ? "MULTIPLE-CORRECT (2+ options correct)"
-      : "SINGLE-CORRECT (exactly 1 option correct)";
-    return `ID: ${q.id}\nType: ${type}\nQuestion: ${q.text}\n${answersStr}`;
+  // ── PASS 3: Generate ONLY wrong distractors ────────────────────────────────
+  // The AI's ONLY job here is inventing 3 plausible wrong values.
+  // Placement of the correct answer is done by our code — never the AI.
+  const distractorList = resolvedQuestions.map((q) => {
+    const correctStr = q.answers.join(", ");
+    const wrongCount = 4 - Math.min(q.answers.length, 4);
+    return `ID: ${q.id}\nQuestion: ${q.text}\nCorrect answer(s): ${correctStr}\nGenerate exactly ${wrongCount} WRONG values that look plausible (e.g. common mistakes, off-by-factor, wrong sign, etc.)`;
   }).join("\n\n---\n\n");
 
-  const pass3Prompt = `You are building multiple-choice options for JEE/NEET questions.
+  const pass3Prompt = `You are generating WRONG distractor options for JEE/NEET multiple-choice questions.
 
-Rules:
-- SINGLE-CORRECT: place the correct value at a random position (A/B/C/D), fill other 3 with plausible wrong values
-- MULTIPLE-CORRECT: place ALL correct values at distinct random positions, fill remaining with plausible wrong values
-- Wrong options must look realistic (common mistakes: sign error, factor of 2, wrong formula, reciprocal, etc.)
-- "answerLetters" lists EVERY letter that is correct
+For each question you are told the CORRECT answer. Your only job is to invent plausible WRONG values.
+Wrong values should look realistic — like answers a student might get from a common mistake.
+Do NOT include the correct answer in your distractors.
 
-QUESTIONS:
-${questionsList}
+${distractorList}
 
-Output ONLY valid JSON — no markdown, no extra text:
+Output ONLY valid JSON — no markdown:
 {
   "questions": [
     {
       "id": "q1",
-      "options": ["A) value", "B) value", "C) value", "D) value"],
-      "answerLetters": ["B"]
+      "distractors": ["wrong1", "wrong2", "wrong3"]
     }
   ]
 }`;
 
-  const r3 = await window.puter.ai.chat(pass3Prompt, { model: optionsModel });
-  const step2 = parseJson<Step2Result>(getPuterContent(r3));
+  const r3 = await window.puter.ai.chat(pass3Prompt, { model: "gpt-4o-mini" });
+  const step3 = parseJson<DistractorResult>(getPuterContent(r3));
+  const distractorMap = new Map(step3.questions?.map((q) => [q.id, q.distractors]) ?? []);
 
-  // ── COMBINE: merge solutions + options ─────────────────────────────────────
-  const optionsMap = new Map<string, Step2Question>();
-  for (const q of step2.questions ?? []) {
-    optionsMap.set(q.id, q);
-  }
-
+  // ── COMBINE: code builds options — AI never touches placement ─────────────
   const combined: GeneratedQuestion[] = resolvedQuestions.map((sq) => {
-    const opts = optionsMap.get(sq.id);
+    const distractors = distractorMap.get(sq.id) ?? ["Cannot be determined", "None of these", "Insufficient data"];
+    const { options, answerLetters, correctOptionStrings } = buildOptions(sq.answers, distractors);
     const multipleCorrect = sq.multipleCorrect ?? false;
 
-    if (opts && opts.options?.length === 4 && opts.answerLetters?.length > 0) {
-      const options = opts.options;
-      const letters = opts.answerLetters.map((l) => l.toUpperCase());
-
-      const correctOptions = letters
-        .map((letter) => {
-          const idx = letter.charCodeAt(0) - 65;
-          return options[idx] ?? null;
-        })
-        .filter(Boolean) as string[];
-
-      const answer = letters.sort().join(", ");
-      return {
-        id: sq.id,
-        text: sq.text,
-        options,
-        answer,
-        answers: correctOptions,
-        solution: sq.solution,
-        difficulty: sq.difficulty,
-        multipleCorrect,
-      };
-    }
-
-    // Fallback: correct answers as first options
-    const labels = ["A", "B", "C", "D"];
-    const fallbackOptions: string[] = [];
-    sq.answers.forEach((val, i) => {
-      if (i < 4) fallbackOptions.push(`${labels[i]}) ${val}`);
-    });
-    while (fallbackOptions.length < 4) {
-      fallbackOptions.push(`${labels[fallbackOptions.length]}) —`);
-    }
-    const fallbackLetters = sq.answers.map((_, i) => labels[i]).slice(0, 4);
     return {
       id: sq.id,
       text: sq.text,
-      options: fallbackOptions,
-      answer: fallbackLetters.join(", "),
-      answers: fallbackOptions.slice(0, sq.answers.length),
+      options,
+      answer: answerLetters.sort().join(", "),
+      answers: correctOptionStrings,
       solution: sq.solution,
       difficulty: sq.difficulty,
       multipleCorrect,
