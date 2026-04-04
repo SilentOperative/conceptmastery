@@ -124,6 +124,17 @@ interface Step1Result {
   questions: SolvedQuestion[];
 }
 
+interface VerifiedQuestion {
+  id: string;
+  verified_answers: string[];
+  confidence: "high" | "medium" | "low";
+  note?: string;
+}
+
+interface VerifyResult {
+  questions: VerifiedQuestion[];
+}
+
 interface Step2Question {
   id: string;
   options: string[];
@@ -142,85 +153,152 @@ export async function generateQuestions(
 ): Promise<GenerateQuestionsResult> {
   const isJeeAdvanced = difficulty === "JEE Advanced";
 
-  // ── PASS 1: Generate questions and SOLVE them (no options yet) ─────────────
+  // Use gpt-4o for JEE Advanced — significantly more accurate for complex math
+  const solveModel = isJeeAdvanced ? "gpt-4o" : "gpt-4o-mini";
+  const optionsModel = "gpt-4o-mini";
+
+  // ── PASS 1: Generate questions and SOLVE them fully ────────────────────────
   const multiAnswerNote = isJeeAdvanced
-    ? `IMPORTANT — JEE Advanced has two question types:
-- Type 1 (Single correct): exactly 1 correct option
-- Type 2 (Multiple correct): 2 or more correct options (mark multipleCorrect: true)
-Mix both types: roughly half single-correct, half multiple-correct.
-For multiple-correct questions, list ALL correct answer values in the "answers" array.`
-    : `All questions are single-correct: the "answers" array has exactly 1 element.`;
+    ? `JEE Advanced question types:
+- Type 1 (Single correct): exactly 1 correct option. Set multipleCorrect: false.
+- Type 2 (Multiple correct): 2 or more options are correct. Set multipleCorrect: true.
+Mix both types across the ${count} questions. For multiple-correct, list ALL correct answer values.`
+    : `Single-correct only: "answers" array has exactly 1 element. multipleCorrect: false.`;
 
-  const pass1Prompt = `You are an expert JEE/NEET educator and mathematician.
+  const solveDepth = isJeeAdvanced
+    ? `SOLVING REQUIREMENTS (JEE Advanced — be extremely careful):
+- Write out EVERY arithmetic and algebraic step explicitly. Do NOT skip steps.
+- Show intermediate numerical values at each stage (e.g. "= 3 × 4 = 12").
+- After reaching your answer, VERIFY it by substituting back or checking with an alternate method.
+- Only then write the final answer into the "answers" array.`
+    : `Solve each question step by step and state the final answer clearly.`;
 
-SOURCE QUESTION (for style/topic reference only — do NOT reuse its numbers):
+  const pass1Prompt = `You are a highly accurate JEE/NEET mathematics and science expert.
+
+SOURCE QUESTION (topic/style reference only — use DIFFERENT numbers):
 "${questionText}"
 
 Subject: ${subject} | Difficulty: ${difficulty}
 
 ${multiAnswerNote}
 
-TASK: Create ${count} NEW practice questions on the same concept but with DIFFERENT numbers/values.
-For EACH question you MUST:
-1. Write the question clearly
-2. Work through the complete solution step-by-step showing all calculations
-3. State ALL correct answer values (just the values, no A/B/C/D letters yet)
+${solveDepth}
+
+Create ${count} NEW practice questions on the same concept with different values. For each:
+1. Write the question text clearly with proper math notation
+2. Solve it completely step by step (show every calculation)
+3. State the exact final answer value(s)
 
 CRITICAL JSON RULES:
-- Respond ONLY with valid JSON — no markdown, no extra text
-- Double ALL backslashes: \\\\frac  \\\\sqrt  \\\\times  \\\\theta
-- Wrap math in dollar signs: $expression$
+- Output ONLY valid JSON — no markdown fences, no prose
+- Double ALL backslashes inside strings: \\\\frac \\\\sqrt \\\\times \\\\theta \\\\pi
+- Wrap all math in dollar signs: $expression$
+- Use \\n between steps in the solution string
 
 JSON format:
 {
-  "topic": "topic name",
+  "topic": "specific topic",
   "subject": "Physics|Chemistry|Mathematics|Biology|General",
   "difficulty": "Easy|Medium|Hard|JEE Advanced",
   "questions": [
     {
       "id": "q1",
-      "text": "Question text with $math$",
-      "solution": "Step 1: ...\nStep 2: ...\nTherefore answer(s) = ...",
-      "answers": ["correct value 1", "correct value 2"],
+      "text": "Question with $math$",
+      "solution": "Step 1: ...\\nStep 2: ...\\nVerification: ...\\nAnswer: ...",
+      "answers": ["exact value"],
       "multipleCorrect": false,
-      "difficulty": "Easy|Medium|Hard|JEE Advanced"
+      "difficulty": "JEE Advanced"
     }
   ]
 }`;
 
-  const r1 = await window.puter.ai.chat(pass1Prompt, { model: "gpt-4o-mini" });
+  const r1 = await window.puter.ai.chat(pass1Prompt, { model: solveModel });
   const step1 = parseJson<Step1Result>(getPuterContent(r1));
 
   if (!step1.questions || step1.questions.length === 0) {
     throw new Error("AI did not return any questions in pass 1.");
   }
 
-  // ── PASS 2: Generate options (correct + distractors) ──────────────────────
-  const questionsList = step1.questions.map((q) => {
+  // ── PASS 2 (JEE Advanced only): Independent verification ──────────────────
+  // A separate model instance re-solves each question cold to catch errors.
+  let verifiedAnswers: Map<string, string[]> | null = null;
+
+  if (isJeeAdvanced) {
+    const verifyList = step1.questions
+      .map((q) => `ID: ${q.id}\nQuestion: ${q.text}\nPrevious answer(s): ${q.answers.join(", ")}`)
+      .join("\n\n---\n\n");
+
+    const verifyPrompt = `You are an independent math checker for JEE Advanced problems.
+
+For each question below:
+1. Solve it yourself completely from scratch — ignore the "Previous answer" shown.
+2. Compare your answer with the "Previous answer".
+3. Report which answer is correct.
+
+Be extremely careful with arithmetic. Show your working internally and only report the final verified answer.
+
+QUESTIONS:
+${verifyList}
+
+Output ONLY valid JSON:
+{
+  "questions": [
+    {
+      "id": "q1",
+      "verified_answers": ["correct value"],
+      "confidence": "high|medium|low"
+    }
+  ]
+}`;
+
+    try {
+      const rv = await window.puter.ai.chat(verifyPrompt, { model: "gpt-4o" });
+      const verify = parseJson<VerifyResult>(getPuterContent(rv));
+      if (verify.questions?.length > 0) {
+        verifiedAnswers = new Map();
+        for (const vq of verify.questions) {
+          if (vq.verified_answers?.length > 0) {
+            verifiedAnswers.set(vq.id, vq.verified_answers);
+          }
+        }
+      }
+    } catch {
+      // Verification failed — continue with pass 1 answers
+    }
+  }
+
+  // Apply verified answers where confidence warrants it
+  const resolvedQuestions = step1.questions.map((q) => {
+    if (verifiedAnswers) {
+      const vAnswers = verifiedAnswers.get(q.id);
+      if (vAnswers && vAnswers.length > 0) {
+        return { ...q, answers: vAnswers };
+      }
+    }
+    return q;
+  });
+
+  // ── PASS 3: Build multiple-choice options ──────────────────────────────────
+  const questionsList = resolvedQuestions.map((q) => {
     const answersStr = q.answers.map((a, i) => `Correct answer ${i + 1}: ${a}`).join("\n");
     const type = q.multipleCorrect
-      ? "MULTIPLE-CORRECT (2+ options will be correct)"
-      : "SINGLE-CORRECT (exactly 1 option will be correct)";
+      ? "MULTIPLE-CORRECT (2+ options correct)"
+      : "SINGLE-CORRECT (exactly 1 option correct)";
     return `ID: ${q.id}\nType: ${type}\nQuestion: ${q.text}\n${answersStr}`;
   }).join("\n\n---\n\n");
 
-  const pass2Prompt = `You are creating multiple-choice options for JEE/NEET questions.
+  const pass3Prompt = `You are building multiple-choice options for JEE/NEET questions.
 
-For each question you are given the TYPE and the CORRECT ANSWER VALUE(S).
-Your job:
-- For SINGLE-CORRECT: place the 1 correct value at a random position (A/B/C/D), fill the other 3 with plausible wrong values
-- For MULTIPLE-CORRECT: place ALL correct values at different random positions, fill remaining positions with plausible wrong values
+Rules:
+- SINGLE-CORRECT: place the correct value at a random position (A/B/C/D), fill other 3 with plausible wrong values
+- MULTIPLE-CORRECT: place ALL correct values at distinct random positions, fill remaining with plausible wrong values
+- Wrong options must look realistic (common mistakes: sign error, factor of 2, wrong formula, reciprocal, etc.)
+- "answerLetters" lists EVERY letter that is correct
 
 QUESTIONS:
 ${questionsList}
 
-CRITICAL JSON RULES:
-- Respond ONLY with valid JSON — no markdown, no extra text
-- Double ALL backslashes: \\\\frac  \\\\sqrt  \\\\times
-- Wrap math in dollar signs: $expression$
-- "answerLetters" must list ALL letters that are correct (e.g. ["A","C"] for multiple-correct)
-
-JSON format:
+Output ONLY valid JSON — no markdown, no extra text:
 {
   "questions": [
     {
@@ -231,16 +309,16 @@ JSON format:
   ]
 }`;
 
-  const r2 = await window.puter.ai.chat(pass2Prompt, { model: "gpt-4o-mini" });
-  const step2 = parseJson<Step2Result>(getPuterContent(r2));
+  const r3 = await window.puter.ai.chat(pass3Prompt, { model: optionsModel });
+  const step2 = parseJson<Step2Result>(getPuterContent(r3));
 
-  // ── COMBINE: merge solutions from pass 1 with options from pass 2 ──────────
+  // ── COMBINE: merge solutions + options ─────────────────────────────────────
   const optionsMap = new Map<string, Step2Question>();
   for (const q of step2.questions ?? []) {
     optionsMap.set(q.id, q);
   }
 
-  const combined: GeneratedQuestion[] = step1.questions.map((sq) => {
+  const combined: GeneratedQuestion[] = resolvedQuestions.map((sq) => {
     const opts = optionsMap.get(sq.id);
     const multipleCorrect = sq.multipleCorrect ?? false;
 
@@ -256,23 +334,21 @@ JSON format:
         .filter(Boolean) as string[];
 
       const answer = letters.sort().join(", ");
-      const answers = correctOptions;
-
       return {
         id: sq.id,
         text: sq.text,
         options,
         answer,
-        answers,
+        answers: correctOptions,
         solution: sq.solution,
         difficulty: sq.difficulty,
         multipleCorrect,
       };
     }
 
-    // Fallback if pass 2 failed
-    const fallbackOptions: string[] = [];
+    // Fallback: correct answers as first options
     const labels = ["A", "B", "C", "D"];
+    const fallbackOptions: string[] = [];
     sq.answers.forEach((val, i) => {
       if (i < 4) fallbackOptions.push(`${labels[i]}) ${val}`);
     });

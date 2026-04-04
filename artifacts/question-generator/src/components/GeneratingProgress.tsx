@@ -1,22 +1,34 @@
 import { useEffect, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 
-const STAGES = [
+const STAGES_DEFAULT = [
   { label: "Analyzing your question", detail: "Understanding the concept and topic area", duration: 2200 },
-  { label: "Identifying related patterns", detail: "Finding similar problem types in JEE/NEET", duration: 2800 },
   { label: "Crafting practice questions", detail: "Creating unique variations with different values", duration: 3500 },
-  { label: "Writing step-by-step solutions", detail: "Generating detailed explanations for each question", duration: 4000 },
-  { label: "Formatting math notation", detail: "Rendering formulas and equations with LaTeX", duration: 99999 },
+  { label: "Writing step-by-step solutions", detail: "Generating detailed explanations", duration: 4000 },
+  { label: "Building answer choices", detail: "Creating plausible options with distractors", duration: 3000 },
+  { label: "Finalizing", detail: "Formatting math notation and rendering LaTeX", duration: 99999 },
+];
+
+const STAGES_JEE = [
+  { label: "Analyzing your question", detail: "Understanding the concept and topic area", duration: 2000 },
+  { label: "Solving with GPT-4o", detail: "Using advanced AI for complex JEE-level math", duration: 8000 },
+  { label: "Writing full solutions", detail: "Showing every calculation step explicitly", duration: 5000 },
+  { label: "Independently verifying answers", detail: "Cross-checking with a second AI pass to catch errors", duration: 8000 },
+  { label: "Building answer choices", detail: "Creating plausible wrong options as distractors", duration: 3000 },
+  { label: "Finalizing", detail: "Formatting math notation and rendering LaTeX", duration: 99999 },
 ];
 
 interface GeneratingProgressProps {
   isVisible: boolean;
   questionCount: number;
+  isJeeAdvanced?: boolean;
 }
 
-export function GeneratingProgress({ isVisible, questionCount }: GeneratingProgressProps) {
+export function GeneratingProgress({ isVisible, questionCount, isJeeAdvanced }: GeneratingProgressProps) {
   const [currentStage, setCurrentStage] = useState(0);
   const [stageProgress, setStageProgress] = useState(0);
+
+  const STAGES = isJeeAdvanced ? STAGES_JEE : STAGES_DEFAULT;
 
   useEffect(() => {
     if (!isVisible) {
@@ -44,7 +56,7 @@ export function GeneratingProgress({ isVisible, questionCount }: GeneratingProgr
     }, interval);
 
     return () => clearInterval(tick);
-  }, [isVisible]);
+  }, [isVisible, isJeeAdvanced]);
 
   if (!isVisible) return null;
 
@@ -60,7 +72,9 @@ export function GeneratingProgress({ isVisible, questionCount }: GeneratingProgr
             Generating {questionCount} practice questions...
           </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            This usually takes 10–20 seconds
+            {isJeeAdvanced
+              ? "JEE Advanced uses GPT-4o + verification — may take 30–60 seconds"
+              : "This usually takes 10–20 seconds"}
           </p>
         </div>
         <span className="text-2xl font-bold tabular-nums text-primary">{overallPct}%</span>

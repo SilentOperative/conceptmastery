@@ -267,7 +267,7 @@ export default function Home() {
               </section>
             )}
 
-            <GeneratingProgress isVisible={isPending} questionCount={count[0]} />
+            <GeneratingProgress isVisible={isPending} questionCount={count[0]} isJeeAdvanced={difficulty === "JEE Advanced"} />
 
             {isError && (
               <Alert variant="destructive" className="print:hidden">
