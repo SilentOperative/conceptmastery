@@ -109,6 +109,43 @@ function fixJsonBackslashes(raw: string): string {
   return result;
 }
 
+function validateAndFixQuestions(result: GenerateQuestionsResult): GenerateQuestionsResult {
+  const fixed = result.questions.map((q) => {
+    if (!q.options || q.options.length === 0) return q;
+
+    const answerLetter = q.answer.match(/^([A-D])\)/)?.[1];
+    if (!answerLetter) return q;
+
+    const answerIndex = answerLetter.charCodeAt(0) - 65;
+    const matchingOption = q.options[answerIndex];
+
+    if (!matchingOption) return q;
+
+    const answerValue = q.answer.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
+    const optionValue = matchingOption.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
+
+    if (answerValue === optionValue) return q;
+
+    const foundIndex = q.options.findIndex((opt) => {
+      const optVal = opt.replace(/^[A-D]\)\s*/, "").trim().toLowerCase();
+      return optVal === answerValue;
+    });
+
+    if (foundIndex !== -1) {
+      const correctLetter = String.fromCharCode(65 + foundIndex);
+      return { ...q, answer: `${correctLetter}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}` };
+    }
+
+    const labels = ["A", "B", "C", "D"];
+    const newOptions = [...q.options];
+    const replaceIdx = answerIndex < newOptions.length ? answerIndex : 0;
+    newOptions[replaceIdx] = `${labels[replaceIdx]}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}`;
+    return { ...q, options: newOptions, answer: `${labels[replaceIdx]}) ${q.answer.replace(/^[A-D]\)\s*/, "").trim()}` };
+  });
+
+  return { ...result, questions: fixed };
+}
+
 export async function generateQuestions(
   questionText: string,
   subject: string,
@@ -116,32 +153,43 @@ export async function generateQuestions(
   count: number
 ): Promise<GenerateQuestionsResult> {
   const prompt = `You are an expert educator for competitive exams like JEE and NEET.
-Your task is to analyze a given question and generate similar practice questions.
-Always respond with valid JSON only, no markdown code blocks.
+Your task is to generate ${count} new practice questions similar to the given question.
+Always respond with valid JSON only — no markdown, no explanation, no code blocks.
 
-Analyze this question and generate ${count} similar practice questions:
-
+SOURCE QUESTION:
 "${questionText}"
 
-Instructions:
-- Detect the topic, subject, and difficulty level
-- Generate ${count} questions similar in concept but with different numbers/values/scenarios
-- Each question should be multiple choice with 4 options (A, B, C, D)
-- Provide the correct answer and a brief step-by-step solution for each
-- Subject hint: ${subject}, Difficulty hint: ${difficulty}
+Subject hint: ${subject} | Difficulty hint: ${difficulty}
 
-CRITICAL - JSON Escaping Rules:
-- You are writing JSON. ALL backslashes in string values MUST be doubled.
-- Write \\\\frac not \\frac, \\\\text not \\text, \\\\times not \\times, \\\\sqrt not \\sqrt
-- Every single LaTeX backslash must appear as \\\\ in the JSON output
+===== GENERATION RULES =====
 
-CRITICAL - Math & Symbol Formatting:
-- Use LaTeX notation for ALL mathematical expressions using KaTeX syntax
-- Wrap inline math in single dollar signs: $expression$
-- Examples: $10^{-2}$, $\\\\frac{1}{2}$, $3 \\\\times 10^{-2}$, $\\\\sqrt{3}$, $\\\\theta$, $\\\\pi$
-- Units: $9.8 \\\\, \\\\text{m/s}^2$, $\\\\text{pF}$, $\\\\text{nC}$
+STEP 1 — For each new question you create:
+  a) Choose different numbers, values, or a slightly different scenario from the source question
+  b) FULLY SOLVE the question yourself first — compute the exact numerical answer
+  c) Only after confirming the answer, create the 4 options
 
-Respond ONLY with this JSON structure:
+STEP 2 — Build the 4 options:
+  - One option MUST be the exact correct answer you computed in step 1
+  - The other 3 options MUST be plausible but WRONG (common calculation mistakes, off-by-one, wrong formula result)
+  - Place the correct answer randomly in position A, B, C, or D
+  - The "answer" field MUST exactly match the option text of the correct option (same letter, same value)
+
+STEP 3 — Write the solution:
+  - Show working step by step that leads to the correct answer
+
+⚠ ABSOLUTE RULE: The correct answer MUST appear verbatim in the options array. Never list an answer that is not one of A/B/C/D.
+
+===== FORMATTING RULES =====
+
+JSON Escaping: ALL backslashes MUST be doubled in JSON strings.
+  - Write \\\\frac not \\frac, \\\\sqrt not \\sqrt, \\\\times not \\times
+
+Math: Use LaTeX wrapped in single dollar signs for inline math.
+  - Examples: $10^{-2}$, $\\\\frac{a}{b}$, $\\\\sqrt{3}$, $\\\\theta$, $\\\\pi$
+
+===== OUTPUT FORMAT =====
+
+Respond ONLY with this exact JSON structure:
 {
   "topic": "specific topic name",
   "subject": "Physics|Chemistry|Mathematics|Biology|General",
@@ -149,19 +197,21 @@ Respond ONLY with this JSON structure:
   "questions": [
     {
       "id": "q1",
-      "text": "question text with $LaTeX$ math",
-      "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
-      "answer": "A) correct answer",
-      "solution": "Step-by-step solution",
+      "text": "Full question text with $math$",
+      "options": ["A) value1", "B) value2", "C) value3", "D) value4"],
+      "answer": "C) value3",
+      "solution": "Step 1: ... Step 2: ... Final answer: value3",
       "difficulty": "Easy|Medium|Hard|JEE Advanced"
     }
   ]
-}`;
+}
+
+The "answer" field must match EXACTLY one entry in the "options" array (same letter, same text).`;
 
   const response = await window.puter.ai.chat(prompt, { model: "gpt-4o-mini" });
   const rawContent = getPuterContent(response);
 
   const fixedJson = fixJsonBackslashes(rawContent);
   const parsed = JSON.parse(fixedJson) as GenerateQuestionsResult;
-  return parsed;
+  return validateAndFixQuestions(parsed);
 }
